@@ -41,7 +41,6 @@ def setup_worker_threads(num_threads=1):
     # Set PyTorch thread limits directly (works even after torch is imported)
     try:
         import torch
-
         torch.set_num_threads(num_threads)
         torch.set_num_interop_threads(num_threads)
         logger.debug(f"Set torch threads to {num_threads}")

@@ -1569,7 +1569,6 @@ def get_model(model_key=None, rank=None, use_cuda=False):
         # when running with multiple processes (num_proc > 1)
         if mp.current_process().name != "MainProcess":
             from data_juicer.utils.process_utils import setup_worker_threads
-
             setup_worker_threads(num_threads=1)
 
         if use_cuda and cuda_device_count() > 0:
