@@ -481,16 +481,15 @@ def prepare_huggingface_model(
     :return: a tuple (model, processor) if `return_model` is True;
         otherwise, only the processor is returned.
     """
-    # Check if we need accelerate for device_map
+    # Use device_map for optimized loading on both CPU and CUDA
     if "device" in model_params:
         device = model_params.pop("device")
-        if device.startswith("cuda"):
-            try:
-                model_params["device_map"] = device
-            except ImportError:
-                # If accelerate is not available, use device directly
-                model_params["device"] = device
-                logger.warning("accelerate not found, using device directly")
+        try:
+            model_params["device_map"] = device
+        except ImportError:
+            # If accelerate is not available, use device directly
+            model_params["device"] = device
+            logger.warning("accelerate not found, using device directly")
 
     pretrained_model_name_or_path = check_model_home(pretrained_model_name_or_path)
     processor = transformers.AutoProcessor.from_pretrained(pretrained_model_name_or_path, **model_params)
@@ -707,16 +706,15 @@ def prepare_simple_aesthetics_model(pretrained_model_name_or_path, *, return_mod
     :return: a tuple (model, input processor) if `return_model` is True;
         otherwise, only the processor is returned.
     """
-    # Check if we need accelerate for device_map
+    # Use device_map for optimized loading on both CPU and CUDA
     if "device" in model_params:
         device = model_params.pop("device")
-        if device.startswith("cuda"):
-            try:
-                model_params["device_map"] = device
-            except ImportError:
-                # If accelerate is not available, use device directly
-                model_params["device"] = device
-                logger.warning("accelerate not found, using device directly")
+        try:
+            model_params["device_map"] = device
+        except ImportError:
+            # If accelerate is not available, use device directly
+            model_params["device"] = device
+            logger.warning("accelerate not found, using device directly")
 
     pretrained_model_name_or_path = check_model_home(pretrained_model_name_or_path)
     processor = transformers.CLIPProcessor.from_pretrained(pretrained_model_name_or_path, **model_params)
