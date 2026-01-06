@@ -18,6 +18,56 @@ from data_juicer.utils.resource_utils import (
 # This leaves some memory for Ray's overhead and other system processes.
 _OPS_MEMORY_LIMIT_FRACTION = 1.0
 
+# Track whether worker threads have been configured
+_WORKER_THREADS_CONFIGURED = False
+
+
+def setup_worker_threads(num_threads=1):
+    """
+    Configure thread limits for worker processes to prevent thread over-subscription.
+
+    When running with multiple worker processes (e.g., num_proc > 1), each worker
+    using multiple threads leads to severe performance degradation due to thread
+    contention. This function limits threads per worker to prevent this issue.
+
+    :param num_threads: Number of threads per worker process (default: 1)
+    """
+    global _WORKER_THREADS_CONFIGURED
+
+    # Only configure once per process
+    if _WORKER_THREADS_CONFIGURED:
+        return
+
+    # Set environment variables for various threading libraries
+    # Note: These may not take effect if libraries are already imported,
+    # but we set them for any libraries that load later
+    thread_env_vars = [
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+    ]
+
+    for var in thread_env_vars:
+        os.environ[var] = str(num_threads)
+
+    # Set PyTorch thread limits directly (works even after torch is imported)
+    try:
+        import torch
+
+        torch.set_num_threads(num_threads)
+        torch.set_num_interop_threads(num_threads)
+        logger.debug(f"Set torch threads to {num_threads}")
+    except ImportError:
+        pass
+    except RuntimeError as e:
+        # torch.set_num_interop_threads can only be called once
+        logger.debug(f"Could not set torch interop threads: {e}")
+
+    _WORKER_THREADS_CONFIGURED = True
+    logger.debug(f"Configured worker thread limits to {num_threads}")
+
 
 def setup_mp(method=None):
     if mp.current_process().name != "MainProcess":
