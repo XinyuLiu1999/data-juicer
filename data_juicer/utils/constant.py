@@ -273,6 +273,11 @@ class StatsKeysConstant(object):
     horizontal_peak_count = "horizontal_peak_count"
     vertical_peak_count = "vertical_peak_count"
     subplot_detected = "subplot_detected"
+    # image quality metrics
+    image_blurriness_scores = "image_blurriness_scores"
+    image_brightness_scores = "image_brightness_scores"
+    image_entropy_scores = "image_entropy_scores"
+    image_grayscale_flags = "image_grayscale_flags"
 
     #  === audios ===
     audio_duration = "audio_duration"
