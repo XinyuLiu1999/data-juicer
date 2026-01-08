@@ -38,11 +38,17 @@ class ImageBrightnessFilter(Filter):
         self.max_brightness = max_brightness
 
     def compute_stats_single(self, sample, context=False):
-        if StatsKeys.image_brightness_scores in sample[Fields.stats]:
+        if (
+            StatsKeys.image_brightness_scores in sample[Fields.stats]
+            and StatsKeys.image_brightness_perc_5_scores in sample[Fields.stats]
+            and StatsKeys.image_brightness_perc_99_scores in sample[Fields.stats]
+        ):
             return sample
 
         if self.image_key not in sample or not sample[self.image_key]:
             sample[Fields.stats][StatsKeys.image_brightness_scores] = []
+            sample[Fields.stats][StatsKeys.image_brightness_perc_5_scores] = []
+            sample[Fields.stats][StatsKeys.image_brightness_perc_99_scores] = []
             return sample
 
         keys = sample[self.image_key]
@@ -50,21 +56,36 @@ class ImageBrightnessFilter(Filter):
             sample, context, keys, load_image, mm_bytes_key=self.image_bytes_key
         )
 
+        brightness_details = [calc_brightness_stats(images[k]) for k in keys]
         sample[Fields.stats][StatsKeys.image_brightness_scores] = [
-            calc_brightness_stats(images[k]) for k in keys
+            detail["brightness_mean"] for detail in brightness_details
+        ]
+        sample[Fields.stats][StatsKeys.image_brightness_perc_5_scores] = [
+            detail["brightness_perc_5"] for detail in brightness_details
+        ]
+        sample[Fields.stats][StatsKeys.image_brightness_perc_99_scores] = [
+            detail["brightness_perc_99"] for detail in brightness_details
         ]
         return sample
 
     def process_single(self, sample):
-        stats = sample[Fields.stats][StatsKeys.image_brightness_scores]
+        stats = sample[Fields.stats].get(StatsKeys.image_brightness_scores, [])
+        perc_5 = sample[Fields.stats].get(StatsKeys.image_brightness_perc_5_scores)
+        perc_99 = sample[Fields.stats].get(StatsKeys.image_brightness_perc_99_scores)
         if not stats:
             return True
+        if perc_5 is None or perc_99 is None:
+            if isinstance(stats[0], dict):
+                perc_5 = [detail["brightness_perc_5"] for detail in stats]
+                perc_99 = [detail["brightness_perc_99"] for detail in stats]
+            else:
+                return True
 
         keep = []
-        for b in stats:
-            if self.min_brightness is not None and b["brightness_perc_99"] < self.min_brightness:
+        for p5, p99 in zip(perc_5, perc_99):
+            if self.min_brightness is not None and p99 < self.min_brightness:
                 keep.append(False)
-            elif self.max_brightness is not None and b["brightness_perc_5"] > self.max_brightness:
+            elif self.max_brightness is not None and p5 > self.max_brightness:
                 keep.append(False)
             else:
                 keep.append(True)
