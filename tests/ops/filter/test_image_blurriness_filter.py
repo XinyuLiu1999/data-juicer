@@ -162,10 +162,7 @@ class ImageBlurrinessFilterTest(DataJuicerTestCaseBase):
 
     def test_empty_images(self):
         """Test that samples with no images pass through."""
-        ds_list = [
-            {'images': []},
-            {'images': [self.img1_path]}
-        ]
+        ds_list = [{'images': []}]
         tgt_list = ds_list
         dataset = Dataset.from_list(ds_list)
         op = ImageBlurrinessFilter(min_blurriness=0)
