@@ -9,6 +9,11 @@ py_data_juicer.egg-info/
 build/
 dist
 
+# compiled extensions
+*.so
+*.c
+!tests/**/*.c
+
 # others
 .DS_Store
 .idea/

@@ -269,6 +269,12 @@ class StatsKeysConstant(object):
     image_nsfw_score = "image_nsfw_score"
     image_watermark_prob = "image_watermark_prob"
     image_pair_similarity = "image_pair_similarity"
+    # image quality metrics
+    image_blurriness_scores = "image_blurriness_scores"
+    image_brightness_scores = "image_brightness_scores"
+    image_brightness_perc_5_scores = "image_brightness_perc_5_scores"
+    image_brightness_perc_99_scores = "image_brightness_perc_99_scores"
+    image_entropy_scores = "image_entropy_scores"
 
     #  === audios ===
     audio_duration = "audio_duration"
