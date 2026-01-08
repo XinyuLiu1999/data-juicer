@@ -12,10 +12,10 @@ from .image_face_count_filter import ImageFaceCountFilter
 from .image_face_ratio_filter import ImageFaceRatioFilter
 from .image_nsfw_filter import ImageNSFWFilter
 from .image_pair_similarity_filter import ImagePairSimilarityFilter
-from .image_bluriness_filter import ImageBlurrinessFilter
+from .image_blurriness_filter import ImageBlurrinessFilter
 from .image_brightness_filter import ImageBrightnessFilter
 from .image_entropy_filter import ImageEntropyFilter
-from .image_greyscale_filter import ImageGrayscaleFilter
+from .image_grayscale_filter import ImageGrayscaleFilter
 from .image_shape_filter import ImageShapeFilter
 from .image_size_filter import ImageSizeFilter
 from .image_text_matching_filter import ImageTextMatchingFilter
@@ -79,6 +79,10 @@ __all__ = [
     "ImageTextMatchingFilter",
     "ImageTextSimilarityFilter",
     "ImageWatermarkFilter",
+    "ImageBlurrinessFilter",
+    "ImageBrightnessFilter",
+    "ImageEntropyFilter",
+    "ImageGrayscaleFilter",
     "LanguageIDScoreFilter",
     "InContextInfluenceFilter",
     "InstructionFollowingDifficultyFilter",

@@ -5,7 +5,7 @@ from io import BytesIO
 from PIL import Image
 
 from data_juicer.core.data import NestedDataset as Dataset
-from data_juicer.ops.filter.image_greyscale_filter import ImageGrayscaleFilter
+from data_juicer.ops.filter.image_grayscale_filter import ImageGrayscaleFilter
 from data_juicer.utils.constant import Fields, StatsKeys
 from data_juicer.utils.unittest_utils import DataJuicerTestCaseBase
 

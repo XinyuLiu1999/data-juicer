@@ -2,7 +2,7 @@ import os
 import unittest
 
 from data_juicer.core.data import NestedDataset as Dataset
-from data_juicer.ops.filter.image_bluriness_filter import ImageBlurrinessFilter
+from data_juicer.ops.filter.image_blurriness_filter import ImageBlurrinessFilter
 from data_juicer.utils.constant import Fields, StatsKeys
 from data_juicer.utils.unittest_utils import DataJuicerTestCaseBase
 
