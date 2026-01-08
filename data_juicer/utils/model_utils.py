@@ -45,6 +45,7 @@ ultralytics = LazyLoader("ultralytics")
 tiktoken = LazyLoader("tiktoken")
 dashscope = LazyLoader("dashscope")
 qwen_vl_utils = LazyLoader("qwen_vl_utils", "qwen-vl-utils")
+pyiqa = LazyLoader("pyiqa")
 transformers_stream_generator = LazyLoader(
     "transformers_stream_generator", "git+https://github.com/HYLcool/transformers-stream-generator.git"
 )
@@ -1515,6 +1516,21 @@ def prepare_sam_3d_body_model(
     return estimator
 
 
+def prepare_pyiqa_model(metric_name: str = "maniqa", **model_params):
+    """
+    Prepare and load an IQA model using pyiqa library.
+
+    :param metric_name: Name of the IQA metric to use (e.g., 'maniqa', 'musiq',
+        'topiq_nr', etc.). Defaults to 'maniqa'.
+    :param model_params: Additional model parameters.
+    :return: pyiqa metric model.
+    """
+    logger.info(f"Loading pyiqa model [{metric_name}]...")
+    device = model_params.pop("device", "cpu")
+    model = pyiqa.create_metric(metric_name, device=device, **model_params)
+    return model
+
+
 MODEL_FUNCTION_MAPPING = {
     "api": prepare_api_model,
     "diffusion": prepare_diffusion_model,
@@ -1526,6 +1542,7 @@ MODEL_FUNCTION_MAPPING = {
     "nltk": prepare_nltk_model,
     "nltk_pos_tagger": prepare_nltk_pos_tagger,
     "opencv_classifier": prepare_opencv_classifier,
+    "pyiqa": prepare_pyiqa_model,
     "recognizeAnything": prepare_recognizeAnything_model,
     "sdxl-prompt-to-prompt": prepare_sdxl_prompt2prompt,
     "sentencepiece": prepare_sentencepiece_for_lang,

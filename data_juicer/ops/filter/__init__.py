@@ -15,6 +15,7 @@ from .image_pair_similarity_filter import ImagePairSimilarityFilter
 from .image_blurriness_filter import ImageBlurrinessFilter
 from .image_brightness_filter import ImageBrightnessFilter
 from .image_entropy_filter import ImageEntropyFilter
+from .image_maniqa_filter import ImageManiqaFilter
 from .image_shape_filter import ImageShapeFilter
 from .image_size_filter import ImageSizeFilter
 from .image_subplot_filter import ImageSubplotFilter
@@ -84,6 +85,7 @@ __all__ = [
     "ImageBrightnessFilter",
     "ImageEntropyFilter",
     "ImageGrayscaleFilter",
+    "ImageManiqaFilter",
     "LanguageIDScoreFilter",
     "InContextInfluenceFilter",
     "InstructionFollowingDifficultyFilter",
