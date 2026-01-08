@@ -276,8 +276,9 @@ class StatsKeysConstant(object):
     # image quality metrics
     image_blurriness_scores = "image_blurriness_scores"
     image_brightness_scores = "image_brightness_scores"
+    image_brightness_perc_5_scores = "image_brightness_perc_5_scores"
+    image_brightness_perc_99_scores = "image_brightness_perc_99_scores"
     image_entropy_scores = "image_entropy_scores"
-    image_grayscale_flags = "image_grayscale_flags"
 
     #  === audios ===
     audio_duration = "audio_duration"
