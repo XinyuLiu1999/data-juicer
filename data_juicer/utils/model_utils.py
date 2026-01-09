@@ -1567,11 +1567,11 @@ def prepare_safe_model(checkpoint_path: str = "", **model_params):
 
     # Import SAFE model components
     try:
-        from model import SAFE as SAFEModel
+        from models.resnet import resnet50
     except ImportError:
         raise ImportError(
             "Failed to import SAFE model. Please ensure the SAFE repository "
-            "is properly cloned and contains model.py"
+            "is properly cloned and contains models/resnet.py"
         )
 
     # Handle checkpoint path
@@ -1590,7 +1590,8 @@ def prepare_safe_model(checkpoint_path: str = "", **model_params):
         )
 
     # Create model and load weights
-    model = SAFEModel()
+    # SAFE uses resnet50 with 2 output classes (real vs fake)
+    model = resnet50(num_classes=2)
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
 
     # Handle different checkpoint formats
