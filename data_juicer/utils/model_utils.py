@@ -1531,6 +1531,92 @@ def prepare_pyiqa_model(metric_name: str = "maniqa", **model_params):
     return model
 
 
+def prepare_safe_model(checkpoint_path: str = "", **model_params):
+    """
+    Prepare and load the SAFE (Synthetic AI-generated image Filter with
+    Enhanced generalization) model for detecting AI-generated images.
+
+    SAFE is a model designed to distinguish between real and AI-generated
+    images with high generalization across different generation methods.
+
+    Reference: https://github.com/Ouxiang-Li/SAFE
+
+    :param checkpoint_path: Path to the SAFE model checkpoint file.
+        If empty, will attempt to use the default checkpoint location.
+    :param model_params: Additional model parameters including 'device'.
+    :return: A tuple of (model, transform) for inference.
+    """
+    device = model_params.pop("device", "cpu")
+
+    safe_repo_path = os.path.join(DATA_JUICER_ASSETS_CACHE, "SAFE")
+    if not os.path.exists(safe_repo_path):
+        logger.info("Cloning SAFE repository...")
+        subprocess.run(
+            [
+                "git",
+                "clone",
+                "https://github.com/Ouxiang-Li/SAFE.git",
+                safe_repo_path,
+            ],
+            check=True,
+        )
+
+    # Add SAFE repo to path for imports
+    if safe_repo_path not in sys.path:
+        sys.path.insert(0, safe_repo_path)
+
+    # Import SAFE model components
+    try:
+        from model import SAFE as SAFEModel
+    except ImportError:
+        raise ImportError(
+            "Failed to import SAFE model. Please ensure the SAFE repository "
+            "is properly cloned and contains model.py"
+        )
+
+    # Handle checkpoint path
+    if not checkpoint_path:
+        # Default checkpoint location in the SAFE repo
+        checkpoint_path = os.path.join(
+            safe_repo_path, "checkpoint", "checkpoint-best.pth"
+        )
+
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(
+            f"SAFE checkpoint not found at {checkpoint_path}. "
+            "Please download the checkpoint from "
+            "https://github.com/Ouxiang-Li/SAFE and place it at the "
+            "specified path, or provide a valid checkpoint_path."
+        )
+
+    # Create model and load weights
+    model = SAFEModel()
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+
+    # Handle different checkpoint formats
+    if "model" in checkpoint:
+        state_dict = checkpoint["model"]
+    elif "state_dict" in checkpoint:
+        state_dict = checkpoint["state_dict"]
+    else:
+        state_dict = checkpoint
+
+    model.load_state_dict(state_dict, strict=False)
+    model = model.to(device).eval()
+
+    # Create transform for preprocessing
+    # SAFE uses standard ImageNet normalization with 224x224 input
+    import torchvision.transforms as T
+
+    transform = T.Compose([
+        T.Resize((224, 224)),
+        T.ToTensor(),
+        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
+    return model, transform
+
+
 MODEL_FUNCTION_MAPPING = {
     "api": prepare_api_model,
     "diffusion": prepare_diffusion_model,
@@ -1543,6 +1629,7 @@ MODEL_FUNCTION_MAPPING = {
     "nltk_pos_tagger": prepare_nltk_pos_tagger,
     "opencv_classifier": prepare_opencv_classifier,
     "pyiqa": prepare_pyiqa_model,
+    "safe": prepare_safe_model,
     "recognizeAnything": prepare_recognizeAnything_model,
     "sdxl-prompt-to-prompt": prepare_sdxl_prompt2prompt,
     "sentencepiece": prepare_sentencepiece_for_lang,
