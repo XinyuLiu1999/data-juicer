@@ -26,7 +26,7 @@ def initialize_ray(cfg=None, force=False):
 
     if cfg is None:
         ray_address = "auto"
-        logger.warning("No ray config provided, using default ray address 'auto'.")
+        # logger.warning("No ray config provided, using default ray address 'auto'.")
     else:
         ray_address = cfg.ray_address
 
