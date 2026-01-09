@@ -25,8 +25,7 @@ class ImageSafeAigcFilterTest(DataJuicerTestCaseBase):
         ) as mock_prepare:
             mock_prepare.return_value = MagicMock()
             op = ImageSafeAigcFilter()
-            self.assertEqual(op.min_score, 0.0)
-            self.assertEqual(op.max_score, 0.5)
+            self.assertTrue(op.keep_real)
             self.assertTrue(op.any)
 
     def test_init_custom(self):
@@ -36,12 +35,10 @@ class ImageSafeAigcFilterTest(DataJuicerTestCaseBase):
         ) as mock_prepare:
             mock_prepare.return_value = MagicMock()
             op = ImageSafeAigcFilter(
-                min_score=0.1,
-                max_score=0.4,
+                keep_real=False,
                 any_or_all="all",
             )
-            self.assertEqual(op.min_score, 0.1)
-            self.assertEqual(op.max_score, 0.4)
+            self.assertFalse(op.keep_real)
             self.assertFalse(op.any)
 
     def test_invalid_any_or_all(self):
@@ -54,84 +51,122 @@ class ImageSafeAigcFilterTest(DataJuicerTestCaseBase):
                 ImageSafeAigcFilter(any_or_all="invalid")
 
     def test_process_single_keep_real(self):
-        """Test process_single keeps real images (low AIGC score)."""
+        """Test process_single keeps real images (prediction=0)."""
         with patch(
             "data_juicer.ops.filter.image_safe_aigc_filter.prepare_model"
         ) as mock_prepare:
             mock_prepare.return_value = MagicMock()
-            op = ImageSafeAigcFilter(max_score=0.5)
+            op = ImageSafeAigcFilter(keep_real=True)
 
-        # Simulate a sample with low AIGC score (real image)
+        # Real image (prediction=0) should be kept
         sample = {
             "images": [self.img1_path],
             Fields.stats: {
-                StatsKeys.image_aigc_score: [0.2]  # Low score = real
+                StatsKeys.image_aigc_score: [0]  # 0 = real
             }
         }
         result = op.process_single(sample)
         self.assertTrue(result)
 
     def test_process_single_filter_fake(self):
-        """Test process_single filters fake images (high AIGC score)."""
+        """Test process_single filters fake images (prediction=1)."""
         with patch(
             "data_juicer.ops.filter.image_safe_aigc_filter.prepare_model"
         ) as mock_prepare:
             mock_prepare.return_value = MagicMock()
-            op = ImageSafeAigcFilter(max_score=0.5)
+            op = ImageSafeAigcFilter(keep_real=True)
 
-        # Simulate a sample with high AIGC score (fake image)
+        # Fake image (prediction=1) should be filtered
         sample = {
             "images": [self.img1_path],
             Fields.stats: {
-                StatsKeys.image_aigc_score: [0.8]  # High score = fake
+                StatsKeys.image_aigc_score: [1]  # 1 = fake
             }
         }
         result = op.process_single(sample)
         self.assertFalse(result)
 
-    def test_process_single_any_strategy(self):
-        """Test 'any' strategy: keep if any image passes."""
+    def test_process_single_keep_fake(self):
+        """Test process_single with keep_real=False keeps fake images."""
         with patch(
             "data_juicer.ops.filter.image_safe_aigc_filter.prepare_model"
         ) as mock_prepare:
             mock_prepare.return_value = MagicMock()
-            op = ImageSafeAigcFilter(max_score=0.5, any_or_all="any")
+            op = ImageSafeAigcFilter(keep_real=False)
 
-        # Sample with one real (0.3) and one fake (0.8)
-        # With 'any', should keep since at least one passes
+        # Fake image (prediction=1) should be kept when keep_real=False
         sample = {
-            "images": [self.img1_path, self.img2_path],
+            "images": [self.img1_path],
             Fields.stats: {
-                StatsKeys.image_aigc_score: [0.8, 0.3]
+                StatsKeys.image_aigc_score: [1]  # 1 = fake
             }
         }
         result = op.process_single(sample)
         self.assertTrue(result)
 
-    def test_process_single_all_strategy(self):
-        """Test 'all' strategy: keep only if all images pass."""
+        # Real image (prediction=0) should be filtered when keep_real=False
+        sample2 = {
+            "images": [self.img1_path],
+            Fields.stats: {
+                StatsKeys.image_aigc_score: [0]  # 0 = real
+            }
+        }
+        result2 = op.process_single(sample2)
+        self.assertFalse(result2)
+
+    def test_process_single_any_strategy(self):
+        """Test 'any' strategy: keep if any image meets condition."""
         with patch(
             "data_juicer.ops.filter.image_safe_aigc_filter.prepare_model"
         ) as mock_prepare:
             mock_prepare.return_value = MagicMock()
-            op = ImageSafeAigcFilter(max_score=0.5, any_or_all="all")
+            op = ImageSafeAigcFilter(keep_real=True, any_or_all="any")
 
-        # Sample with one real (0.3) and one fake (0.8)
-        # With 'all', should filter since not all pass
+        # One real (0) and one fake (1)
+        # With 'any', should keep since at least one is real
         sample = {
             "images": [self.img1_path, self.img2_path],
             Fields.stats: {
-                StatsKeys.image_aigc_score: [0.8, 0.3]
+                StatsKeys.image_aigc_score: [1, 0]  # fake, real
+            }
+        }
+        result = op.process_single(sample)
+        self.assertTrue(result)
+
+        # All fake
+        sample2 = {
+            "images": [self.img1_path, self.img2_path],
+            Fields.stats: {
+                StatsKeys.image_aigc_score: [1, 1]  # both fake
+            }
+        }
+        result2 = op.process_single(sample2)
+        self.assertFalse(result2)
+
+    def test_process_single_all_strategy(self):
+        """Test 'all' strategy: keep only if all images meet condition."""
+        with patch(
+            "data_juicer.ops.filter.image_safe_aigc_filter.prepare_model"
+        ) as mock_prepare:
+            mock_prepare.return_value = MagicMock()
+            op = ImageSafeAigcFilter(keep_real=True, any_or_all="all")
+
+        # One real (0) and one fake (1)
+        # With 'all', should filter since not all are real
+        sample = {
+            "images": [self.img1_path, self.img2_path],
+            Fields.stats: {
+                StatsKeys.image_aigc_score: [1, 0]  # fake, real
             }
         }
         result = op.process_single(sample)
         self.assertFalse(result)
 
-        # Sample with both real
+        # All real
         sample2 = {
             "images": [self.img1_path, self.img2_path],
             Fields.stats: {
-                StatsKeys.image_aigc_score: [0.2, 0.3]
+                StatsKeys.image_aigc_score: [0, 0]  # both real
             }
         }
         result2 = op.process_single(sample2)
@@ -143,7 +178,7 @@ class ImageSafeAigcFilterTest(DataJuicerTestCaseBase):
             "data_juicer.ops.filter.image_safe_aigc_filter.prepare_model"
         ) as mock_prepare:
             mock_prepare.return_value = MagicMock()
-            op = ImageSafeAigcFilter(max_score=0.5)
+            op = ImageSafeAigcFilter()
 
         # Empty images should be kept (no images to filter)
         sample = {
@@ -154,42 +189,6 @@ class ImageSafeAigcFilterTest(DataJuicerTestCaseBase):
         }
         result = op.process_single(sample)
         self.assertTrue(result)
-
-    def test_process_single_min_score(self):
-        """Test filtering with min_score threshold."""
-        with patch(
-            "data_juicer.ops.filter.image_safe_aigc_filter.prepare_model"
-        ) as mock_prepare:
-            mock_prepare.return_value = MagicMock()
-            # Filter images with score between 0.1 and 0.5
-            op = ImageSafeAigcFilter(min_score=0.1, max_score=0.5)
-
-        # Score below min - should be filtered
-        sample1 = {
-            "images": [self.img1_path],
-            Fields.stats: {
-                StatsKeys.image_aigc_score: [0.05]
-            }
-        }
-        self.assertFalse(op.process_single(sample1))
-
-        # Score in range - should be kept
-        sample2 = {
-            "images": [self.img1_path],
-            Fields.stats: {
-                StatsKeys.image_aigc_score: [0.3]
-            }
-        }
-        self.assertTrue(op.process_single(sample2))
-
-        # Score above max - should be filtered
-        sample3 = {
-            "images": [self.img1_path],
-            Fields.stats: {
-                StatsKeys.image_aigc_score: [0.7]
-            }
-        }
-        self.assertFalse(op.process_single(sample3))
 
     def test_compute_stats_single_empty(self):
         """Test compute_stats_single with empty images."""
@@ -217,18 +216,18 @@ class ImageSafeAigcFilterTest(DataJuicerTestCaseBase):
             op = ImageSafeAigcFilter()
 
         # Pre-computed stats
-        existing_scores = [0.3, 0.4]
+        existing_preds = [0, 1]
         sample = {
             "images": [self.img1_path, self.img2_path],
             Fields.stats: {
-                StatsKeys.image_aigc_score: existing_scores
+                StatsKeys.image_aigc_score: existing_preds
             }
         }
         result = op.compute_stats_single(sample)
         # Should return unchanged
         self.assertEqual(
             result[Fields.stats][StatsKeys.image_aigc_score],
-            existing_scores
+            existing_preds
         )
 
 

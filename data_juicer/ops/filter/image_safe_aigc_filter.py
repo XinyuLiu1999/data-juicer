@@ -28,8 +28,12 @@ class ImageSafeAigcFilter(Filter):
     Paper: "Improving Synthetic Image Detection Towards Generalization:
            An Image Transformation Perspective" (KDD2025)
 
-    The model outputs a probability score where higher values indicate
-    a higher likelihood that the image is AI-generated (fake).
+    The model outputs a binary prediction:
+    - 0: Real image
+    - 1: AI-generated (fake) image
+
+    By default, this filter keeps real images (prediction=0) and removes
+    AI-generated images (prediction=1).
     """
 
     _accelerator = "cuda"
@@ -37,8 +41,7 @@ class ImageSafeAigcFilter(Filter):
     def __init__(
         self,
         checkpoint_path: str = "",
-        min_score: float = 0.0,
-        max_score: float = 0.5,
+        keep_real: bool = True,
         any_or_all: str = "any",
         *args,
         **kwargs,
@@ -50,11 +53,9 @@ class ImageSafeAigcFilter(Filter):
             If empty, will attempt to use the default checkpoint location
             in the cloned SAFE repository. Users should download the
             checkpoint from https://github.com/Ouxiang-Li/SAFE.
-        :param min_score: Minimum AIGC score threshold. Images with scores
-            below this will be filtered out. Range from 0 to 1. Default is 0.
-        :param max_score: Maximum AIGC score threshold. Images with scores
-            above this will be filtered out. Range from 0 to 1. Default is 0.5
-            (keeping images that are more likely to be real).
+        :param keep_real: If True (default), keep real images and filter out
+            AI-generated images. If False, keep AI-generated images and
+            filter out real images.
         :param any_or_all: Strategy for handling multiple images in a sample.
             'any': keep the sample if any image meets the condition.
             'all': keep the sample only if all images meet the condition.
@@ -65,8 +66,7 @@ class ImageSafeAigcFilter(Filter):
             "2GB" if kwargs.get("memory", 0) == 0 else kwargs["memory"]
         )
         super().__init__(*args, **kwargs)
-        self.min_score = min_score
-        self.max_score = max_score
+        self.keep_real = keep_real
 
         if any_or_all not in ["any", "all"]:
             raise ValueError(
@@ -88,7 +88,7 @@ class ImageSafeAigcFilter(Filter):
         # there is no image in this sample
         if self.image_key not in sample or not sample[self.image_key]:
             sample[Fields.stats][StatsKeys.image_aigc_score] = np.array(
-                [], dtype=np.float64
+                [], dtype=np.int64
             )
             return sample
 
@@ -108,8 +108,8 @@ class ImageSafeAigcFilter(Filter):
         # determine device
         device = next(model.parameters()).device
 
-        # process images and compute AIGC scores
-        aigc_scores = []
+        # process images and compute binary predictions
+        predictions = []
         for key in loaded_image_keys:
             image = images[key]
             # Convert to RGB if necessary
@@ -122,30 +122,31 @@ class ImageSafeAigcFilter(Filter):
             # Run inference
             with torch.no_grad():
                 output = model(input_tensor)
-                # SAFE outputs logits, apply softmax to get probability
-                # Class 1 is typically the "fake/AIGC" class
-                if output.dim() == 1:
-                    # Single output (probability of being fake)
-                    prob = torch.sigmoid(output).item()
+                # Binary prediction: 0=real, 1=fake
+                if output.dim() == 1 or output.shape[-1] == 1:
+                    # Single logit output
+                    pred = int(output.squeeze() > 0)
                 else:
                     # Two-class output [real, fake]
-                    prob = torch.softmax(output, dim=-1)[0, 1].item()
-                aigc_scores.append(float(prob))
+                    pred = int(output.argmax(dim=-1).item())
+                predictions.append(pred)
 
-        sample[Fields.stats][StatsKeys.image_aigc_score] = aigc_scores
+        sample[Fields.stats][StatsKeys.image_aigc_score] = predictions
 
         return sample
 
     def process_single(self, sample, rank=None):
-        aigc_scores = sample[Fields.stats][StatsKeys.image_aigc_score]
-        if len(aigc_scores) <= 0:
+        predictions = sample[Fields.stats][StatsKeys.image_aigc_score]
+        if len(predictions) <= 0:
             return True
 
+        # Determine which prediction value to keep
+        # keep_real=True: keep prediction=0 (real)
+        # keep_real=False: keep prediction=1 (fake)
+        target_pred = 0 if self.keep_real else 1
+
         keep_bools = np.array(
-            [
-                self.get_keep_boolean(score, self.min_score, self.max_score)
-                for score in aigc_scores
-            ]
+            [pred == target_pred for pred in predictions]
         )
 
         # different strategies
