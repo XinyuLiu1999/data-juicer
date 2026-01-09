@@ -52,6 +52,19 @@ def initialize_ray(cfg=None, force=False):
         if var in os.environ:
             env_vars[var] = os.environ[var]
 
+    # Propagate proxy environment variables
+    proxy_env_vars = [
+        'HTTP_PROXY',
+        'HTTPS_PROXY',
+        'NO_PROXY',
+        'http_proxy',
+        'https_proxy',
+        'no_proxy',
+    ]
+    for var in proxy_env_vars:
+        if var in os.environ:
+            env_vars[var] = os.environ[var]
+
     ray.init(
         ray_address,
         ignore_reinit_error=True,
