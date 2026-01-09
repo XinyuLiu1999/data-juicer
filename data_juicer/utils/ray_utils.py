@@ -36,6 +36,22 @@ def initialize_ray(cfg=None, force=False):
         if k.startswith(SPECIAL_TOKEN_ENV_PREFIX):
             env_vars.update({k: v})
 
+    # Propagate HuggingFace-related environment variables for offline mode and caching
+    hf_env_vars = [
+        'HF_HUB_OFFLINE',
+        'TRANSFORMERS_OFFLINE',
+        'HF_DATASETS_OFFLINE',
+        'HF_HOME',
+        'HUGGINGFACE_HUB_CACHE',
+        'TRANSFORMERS_CACHE',
+        'HF_DATASETS_CACHE',
+        'HF_TOKEN',
+        'HUGGINGFACE_TOKEN',
+    ]
+    for var in hf_env_vars:
+        if var in os.environ:
+            env_vars[var] = os.environ[var]
+
     ray.init(
         ray_address,
         ignore_reinit_error=True,
