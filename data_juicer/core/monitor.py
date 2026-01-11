@@ -20,13 +20,17 @@ def resource_monitor(mdict, interval):
         time.sleep(interval)
         try:
             stop_sign = mdict["stop"]
-        except (BrokenPipeError, FileNotFoundError):
+        except (BrokenPipeError, FileNotFoundError, ConnectionResetError):
             # mdict crushes due to the main process is terminated already,
             # which is not the fault here
             return
         if stop_sign:
             break
-    mdict["resource"] = this_states
+    try:
+        mdict["resource"] = this_states
+    except (BrokenPipeError, FileNotFoundError, ConnectionResetError):
+        # mdict crushes due to the main process is terminated already
+        return
 
 
 class Monitor:
@@ -228,10 +232,18 @@ class Monitor:
             end = time.time()
 
             # stop monitor
-            mdict["stop"] = True
+            try:
+                mdict["stop"] = True
+            except (BrokenPipeError, FileNotFoundError, ConnectionResetError):
+                # mdict connection lost, monitor process may have crashed
+                pass
             monitor_proc.join()
 
-            resource_util_dict["resource"] = mdict["resource"]
+            try:
+                resource_util_dict["resource"] = mdict["resource"]
+            except (BrokenPipeError, FileNotFoundError, ConnectionResetError, KeyError):
+                # mdict connection lost or resource data not available
+                resource_util_dict["resource"] = []
 
             # record interval
             resource_util_dict["sampling interval"] = sample_interval
