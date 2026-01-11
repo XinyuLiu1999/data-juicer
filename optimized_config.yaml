@@ -1,0 +1,144 @@
+project_name: 'cc3m-testing'
+
+dataset:
+  configs:
+    - type: local
+      path: /cephfs/liuxinyu/cc3m-parquet/cc3m_sampled_10_per_shard.parquet
+      format: parquet
+export_path: /cephfs/liuxinyu/my_dj/tests/testing-cc3m-1/testing-cc3m-output.parquet
+
+executor_type: 'ray'
+ray_address: 'auto'
+text_keys: 'text'
+trace_num: 50
+
+# Multimodal settings
+image_key: 'images'
+image_special_token: '<image>'
+eoc_special_token: '<|__dj__eoc|>'
+
+open_tracer: true
+open_monitor: true  # Enable resource monitoring
+
+# CRITICAL: Enable auto parallelism - this prevents over-allocation
+auto_op_parallelism: true
+
+process:
+  # =================================================================
+  # MAPPERS - Lightweight preprocessing
+  # =================================================================
+  - fix_unicode_mapper:
+  - punctuation_normalization_mapper:
+
+  # =================================================================
+  # DEDUPLICATION
+  # =================================================================
+  - ray_image_deduplicator:
+
+  # =================================================================
+  # TEXT FILTERS (CPU-based, lightweight)
+  # Strategy: Let auto-parallelism handle concurrency
+  # =================================================================
+  - alphanumeric_filter:
+      tokenization: false
+      min_ratio: 0.60
+
+  - character_repetition_filter:
+      rep_len: 10
+      max_ratio: 0.09373663
+
+  - flagged_words_filter:
+      lang: en
+      tokenization: false
+      max_ratio: 0.0
+
+  - perplexity_filter:
+      lang: en
+      max_ppl: 6000
+      # Perplexity uses CPU models, can specify memory hint
+      memory: '1GB'
+
+  - special_characters_filter:
+      min_ratio: 0.22
+      max_ratio: 0.40
+
+  - word_repetition_filter:
+      lang: en
+      tokenization: false
+      rep_len: 10
+      max_ratio: 0.02
+
+  # =================================================================
+  # SIMPLE IMAGE FILTERS (CPU-based, no models)
+  # Strategy: Lightweight, high parallelism
+  # =================================================================
+  - image_aspect_ratio_filter:
+      min_ratio: 0.5
+      max_ratio: 2.5
+      any_or_all: any
+
+  - image_shape_filter:
+      max_width: 1024
+      max_height: 1024
+      any_or_all: any
+
+  - image_size_filter:
+      max_size: "512KB"
+      any_or_all: any
+
+  - image_blurriness_filter:
+      min_blurriness: 5.0
+      max_blurriness: 40
+
+  - image_brightness_filter:
+      min_brightness: 0.08
+      max_brightness: 0.95
+
+  - image_entropy_filter:
+      min_entropy: 2.5
+
+  # =================================================================
+  # GPU-BASED MODEL FILTERS
+  # Strategy: Only specify memory, let system optimize concurrency
+  # Filters run SEQUENTIALLY in pipeline, so resources aren't summed
+  # =================================================================
+
+  - image_text_similarity_filter:
+      hf_clip: openai/clip-vit-base-patch32
+      min_score: 0.18
+      memory: '1500MB'
+      # Auto: num_gpus, num_proc, num_cpus
+
+  - image_text_matching_filter:
+      hf_blip: Salesforce/blip-itm-base-coco
+      min_score: 0.42
+      memory: '1500MB'
+      # Auto: num_gpus, num_proc, num_cpus
+
+  - image_watermark_filter:
+      hf_watermark_model: amrul-hzz/watermark_detector
+      prob_threshold: 0.8
+      memory: '500MB'
+      # Auto: num_gpus, num_proc, num_cpus
+
+  - image_nsfw_filter:
+      hf_nsfw_model: Falconsai/nsfw_image_detection
+      max_score: 0.0005
+      memory: '1GB'
+      # Auto: num_gpus, num_proc, num_cpus
+
+  - image_aesthetics_filter:
+      hf_scorer_model: shunk031/aesthetics-predictor-v2-sac-logos-ava1-l14-linearMSE
+      min_score: 0.3
+      memory: '1500MB'
+      # Auto: num_gpus, num_proc, num_cpus
+
+  - image_maniqa_filter:
+      min_score: 0.3
+      memory: '2GB'
+      # Auto: num_gpus, num_proc, num_cpus
+
+  - image_safe_aigc_filter:
+      max_score: 0.95
+      memory: '2GB'
+      # Auto: num_gpus, num_proc, num_cpus

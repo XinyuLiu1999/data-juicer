@@ -1,0 +1,180 @@
+project_name: 'cc3m-testing'
+
+dataset:
+  configs:
+    - type: local
+      path: /cephfs/liuxinyu/cc3m-parquet/cc3m_sampled_10_per_shard.parquet
+      format: parquet
+export_path: /cephfs/liuxinyu/my_dj/tests/testing-cc3m-1/testing-cc3m-output.parquet
+
+executor_type: 'ray'
+ray_address: 'auto'
+text_keys: 'text'
+trace_num: 50
+
+# Multimodal settings
+image_key: 'images'
+image_special_token: '<image>'
+eoc_special_token: '<|__dj__eoc|>'
+
+open_tracer: true
+open_monitor: true
+
+# Disable auto parallelism for manual control
+auto_op_parallelism: false
+
+process:
+  # =================================================================
+  # MAPPERS
+  # =================================================================
+  - fix_unicode_mapper:
+  - punctuation_normalization_mapper:
+
+  # =================================================================
+  # DEDUPLICATION
+  # =================================================================
+  - ray_image_deduplicator:
+
+  # =================================================================
+  # TEXT FILTERS (CPU-based)
+  # Manual allocation: Use moderate parallelism
+  # =================================================================
+  - alphanumeric_filter:
+      tokenization: false
+      min_ratio: 0.60
+      num_proc: 16  # Half of available CPUs
+
+  - character_repetition_filter:
+      rep_len: 10
+      max_ratio: 0.09373663
+      num_proc: 16
+
+  - flagged_words_filter:
+      lang: en
+      tokenization: false
+      max_ratio: 0.0
+      num_proc: 16
+
+  - perplexity_filter:
+      lang: en
+      max_ppl: 6000
+      memory: '1GB'
+      num_proc: 8  # Lower for model-based CPU filter
+
+  - special_characters_filter:
+      min_ratio: 0.22
+      max_ratio: 0.40
+      num_proc: 16
+
+  - word_repetition_filter:
+      lang: en
+      tokenization: false
+      rep_len: 10
+      max_ratio: 0.02
+      num_proc: 16
+
+  # =================================================================
+  # SIMPLE IMAGE FILTERS (CPU-based)
+  # =================================================================
+  - image_aspect_ratio_filter:
+      min_ratio: 0.5
+      max_ratio: 2.5
+      any_or_all: any
+      num_proc: 16
+
+  - image_shape_filter:
+      max_width: 1024
+      max_height: 1024
+      any_or_all: any
+      num_proc: 16
+
+  - image_size_filter:
+      max_size: "512KB"
+      any_or_all: any
+      num_proc: 16
+
+  - image_blurriness_filter:
+      min_blurriness: 5.0
+      max_blurriness: 40
+      num_proc: 16
+
+  - image_brightness_filter:
+      min_brightness: 0.08
+      max_brightness: 0.95
+      num_proc: 16
+
+  - image_entropy_filter:
+      min_entropy: 2.5
+      num_proc: 16
+
+  # =================================================================
+  # GPU-BASED MODEL FILTERS
+  # Manual allocation: Conservative to fit in 32 CPUs + 2 GPUs
+  #
+  # IMPORTANT: These filters run SEQUENTIALLY in the pipeline!
+  # Only ONE filter is active at a time, so we can allocate more
+  # resources per filter as long as each fits within total resources.
+  # =================================================================
+
+  # Lighter models: Use fractional GPUs for higher throughput
+  - image_text_similarity_filter:
+      hf_clip: openai/clip-vit-base-patch32
+      min_score: 0.18
+      memory: '1500MB'
+      num_gpus: 0.25      # 1/4 GPU per worker
+      num_proc: 8         # 8 workers total = 4 per GPU
+      num_cpus: 2         # 2 CPUs per worker = 16 CPUs total
+      use_ray_actor: true
+
+  - image_text_matching_filter:
+      hf_blip: Salesforce/blip-itm-base-coco
+      min_score: 0.42
+      memory: '1500MB'
+      num_gpus: 0.25
+      num_proc: 8
+      num_cpus: 2
+      use_ray_actor: true
+
+  - image_watermark_filter:
+      hf_watermark_model: amrul-hzz/watermark_detector
+      prob_threshold: 0.8
+      memory: '500MB'
+      num_gpus: 0.2       # Small model, even less GPU needed
+      num_proc: 10        # 10 workers = 5 per GPU
+      num_cpus: 2         # 20 CPUs total
+      use_ray_actor: true
+
+  - image_nsfw_filter:
+      hf_nsfw_model: Falconsai/nsfw_image_detection
+      max_score: 0.0005
+      memory: '1GB'
+      num_gpus: 0.25
+      num_proc: 8
+      num_cpus: 2
+      use_ray_actor: true
+
+  - image_aesthetics_filter:
+      hf_scorer_model: shunk031/aesthetics-predictor-v2-sac-logos-ava1-l14-linearMSE
+      min_score: 0.3
+      memory: '1500MB'
+      num_gpus: 0.25
+      num_proc: 8
+      num_cpus: 2
+      use_ray_actor: true
+
+  # Heavier models: Use more GPU per worker, fewer workers
+  - image_maniqa_filter:
+      min_score: 0.3
+      memory: '2GB'
+      num_gpus: 0.5       # 1/2 GPU per worker
+      num_proc: 4         # 4 workers = 2 per GPU
+      num_cpus: 4         # 4 CPUs per worker = 16 CPUs total
+      use_ray_actor: true
+
+  - image_safe_aigc_filter:
+      max_score: 0.95
+      memory: '2GB'
+      num_gpus: 0.5
+      num_proc: 4
+      num_cpus: 4
+      use_ray_actor: true
