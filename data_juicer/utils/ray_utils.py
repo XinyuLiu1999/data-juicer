@@ -71,7 +71,6 @@ def initialize_ray(cfg=None, force=False):
         runtime_env=dict(
             py_modules=cfg.custom_operator_paths if cfg.get("custom_operator_paths", None) else None, env_vars=env_vars
         ),
-        metrics_exporter=None
     )
 
 
