@@ -14,6 +14,7 @@ from .image_nsfw_filter import ImageNSFWFilter
 from .image_pair_similarity_filter import ImagePairSimilarityFilter
 from .image_safe_aigc_filter import ImageSafeAigcFilter
 from .image_blurriness_filter import ImageBlurrinessFilter
+from .image_border_variance_filter import ImageBorderVarianceFilter
 from .image_brightness_filter import ImageBrightnessFilter
 from .image_entropy_filter import ImageEntropyFilter
 from .image_maniqa_filter import ImageManiqaFilter
@@ -84,6 +85,7 @@ __all__ = [
     "ImageTextSimilarityFilter",
     "ImageWatermarkFilter",
     "ImageBlurrinessFilter",
+    "ImageBorderVarianceFilter",
     "ImageBrightnessFilter",
     "ImageEntropyFilter",
     "ImageGrayscaleFilter",

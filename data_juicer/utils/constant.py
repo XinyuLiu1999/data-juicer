@@ -281,6 +281,7 @@ class StatsKeysConstant(object):
     image_entropy_scores = "image_entropy_scores"
     image_maniqa_scores = "image_maniqa_scores"
     image_aigc_score = "image_aigc_score"
+    image_border_variance_scores = "image_border_variance_scores"
 
     #  === audios ===
     audio_duration = "audio_duration"
