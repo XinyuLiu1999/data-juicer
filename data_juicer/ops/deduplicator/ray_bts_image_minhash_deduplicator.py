@@ -219,15 +219,22 @@ class BTSUnionFind:
         return [idx for uid, idx in queries if uid in self.parent]
 
 
-def get_remote_classes():
-    """Get remote versions of classes with Ray decorators applied at runtime."""
+def get_remote_classes(actor_memory: Optional[int] = None):
+    """Get remote versions of classes with Ray decorators applied at runtime.
+
+    :param actor_memory: Memory reservation for EdgeBuffer and BTSUnionFind actors in bytes.
+    """
     # Apply ray.method decorator to get_next_id at runtime
     IdGenerator.get_next_id = ray.method(num_returns=2)(IdGenerator.get_next_id)
 
+    remote_args = {"scheduling_strategy": "SPREAD"}
+    if actor_memory is not None:
+        remote_args["memory"] = actor_memory
+
     return {
         "IdGenerator": ray.remote(IdGenerator),
-        "EdgeBuffer": ray.remote(scheduling_strategy="SPREAD")(EdgeBuffer),
-        "BTSUnionFind": ray.remote(scheduling_strategy="SPREAD")(BTSUnionFind),
+        "EdgeBuffer": ray.remote(**remote_args)(EdgeBuffer),
+        "BTSUnionFind": ray.remote(**remote_args)(BTSUnionFind),
     }
 
 
