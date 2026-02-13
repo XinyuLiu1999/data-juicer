@@ -329,10 +329,16 @@ class DefaultLocalDataLoadStrategy(DefaultDataLoadStrategy):
                 add_suffix = True
                 break
         load_data_np = kwargs.get("num_proc", 1)
+        laioncoco_preprocessing = getattr(self.cfg, "laioncoco_preprocessing", False)
 
         # use proper formatter to load data
         formatter = load_formatter(
-            dataset_path=self.ds_config["path"], text_keys=text_keys, suffixes=suffixes, add_suffix=add_suffix, **kwargs
+            dataset_path=self.ds_config["path"],
+            text_keys=text_keys,
+            suffixes=suffixes,
+            add_suffix=add_suffix,
+            laioncoco_preprocessing=laioncoco_preprocessing,
+            **kwargs,
         )
         # TODO more sophiscated localformatter routing
         return formatter.load_dataset(load_data_np, self.cfg)

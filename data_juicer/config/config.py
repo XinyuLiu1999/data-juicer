@@ -375,6 +375,14 @@ def init_configs(args: Optional[List[str]] = None, which_entry: object = None, l
                 help="Skip errors in OPs caused by unexpected invalid samples.",  # noqa: E251
             )
             parser.add_argument(
+                "--laioncoco_preprocessing",
+                type=bool,
+                default=False,
+                help="Enable LAION-COCO format preprocessing. When True, extracts "  # noqa: E251
+                "'text' from 'clean_content' JSON, flattens 'image_buffer_list' "
+                "into 'images' (image IDs) and 'image_bytes' (raw bytes) columns.",
+            )
+            parser.add_argument(
                 "--use_cache",
                 type=bool,
                 default=True,

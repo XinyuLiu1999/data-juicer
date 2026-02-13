@@ -30,6 +30,7 @@ class LocalFormatter(BaseFormatter):
         suffixes: Union[str, List[str], None] = None,
         text_keys: List[str] = None,
         add_suffix=False,
+        laioncoco_preprocessing=False,
         **kwargs,
     ):
         """
@@ -43,6 +44,8 @@ class LocalFormatter(BaseFormatter):
             text.
         :param add_suffix: whether to add the file suffix to dataset
             meta info
+        :param laioncoco_preprocessing: whether to apply LAION-COCO
+            format preprocessing
         :param kwargs: extra args
         """
         self.type = type
@@ -50,6 +53,7 @@ class LocalFormatter(BaseFormatter):
         self.text_keys = text_keys
         self.data_files = find_files_with_suffix(dataset_path, suffixes)
         self.add_suffix = add_suffix
+        self.laioncoco_preprocessing = laioncoco_preprocessing
 
     def load_dataset(self, num_proc: int = 1, global_cfg=None) -> Dataset:
         """
@@ -75,6 +79,8 @@ class LocalFormatter(BaseFormatter):
             from data_juicer.core.data import NestedDataset
 
             datasets = NestedDataset(concatenate_datasets([ds for _, ds in datasets.items()]))
+        if self.laioncoco_preprocessing:
+            datasets = preprocess_laioncoco(datasets, num_proc)
         ds = unify_format(datasets, text_keys=self.text_keys, num_proc=num_proc, global_cfg=global_cfg)
         return ds
 
@@ -132,6 +138,57 @@ def add_suffixes(datasets: DatasetDict, num_proc: int = 1) -> Dataset:
     from data_juicer.core.data import NestedDataset
 
     return NestedDataset(datasets)
+
+
+def preprocess_laioncoco(dataset, num_proc=1):
+    """
+    Preprocess LAION-COCO format dataset.
+
+    Transforms the non-standard LAION-COCO schema into the format
+    expected by Data-Juicer:
+    - Extracts 'text' from the 'clean_content' JSON string
+    - Flattens 'image_buffer_list' structs into 'images' (IDs) and
+      'image_bytes' (raw bytes) columns
+
+    :param dataset: a NestedDataset with LAION-COCO schema
+    :param num_proc: number of processes for mapping
+    :return: transformed NestedDataset
+    """
+    import json
+
+    from data_juicer.core.data import NestedDataset
+
+    logger.info("Applying LAION-COCO preprocessing...")
+
+    def transform(sample):
+        # 1. Extract 'text' from clean_content JSON
+        clean = json.loads(sample["clean_content"])
+        sample["text"] = clean.get("text", "")
+
+        # 2. Flatten image_buffer_list into images (IDs) and
+        #    image_bytes (raw bytes)
+        buf_list = sample.get("image_buffer_list", []) or []
+        sample["images"] = [item["image_id"] for item in buf_list]
+        sample["image_bytes"] = [item["buffer"] for item in buf_list]
+
+        return sample
+
+    dataset = dataset.map(
+        transform, num_proc=num_proc, desc="LAION-COCO preprocessing"
+    )
+
+    # Remove original complex columns that are no longer needed
+    cols_to_remove = [
+        col
+        for col in ["clean_content", "image_buffer_list"]
+        if col in dataset.column_names
+    ]
+    if cols_to_remove:
+        dataset = dataset.remove_columns(cols_to_remove)
+
+    if not isinstance(dataset, NestedDataset):
+        dataset = NestedDataset(dataset)
+    return dataset
 
 
 def unify_format(

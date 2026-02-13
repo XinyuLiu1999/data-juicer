@@ -4,7 +4,14 @@ from data_juicer.format.formatter import FORMATTERS, BaseFormatter
 from data_juicer.utils.file_utils import find_files_with_suffix
 
 
-def load_formatter(dataset_path, text_keys=None, suffixes=None, add_suffix=False, **kwargs) -> BaseFormatter:
+def load_formatter(
+    dataset_path,
+    text_keys=None,
+    suffixes=None,
+    add_suffix=False,
+    laioncoco_preprocessing=False,
+    **kwargs,
+) -> BaseFormatter:
     """
     Load the appropriate formatter for different types of data formats.
 
@@ -15,6 +22,8 @@ def load_formatter(dataset_path, text_keys=None, suffixes=None, add_suffix=False
         Default: None
     :param add_suffix: whether to add the file suffix to dataset meta.
         Default: False
+    :param laioncoco_preprocessing: whether to apply LAION-COCO format
+        preprocessing. Default: False
     :return: a dataset formatter.
     """
 
@@ -45,7 +54,12 @@ def load_formatter(dataset_path, text_keys=None, suffixes=None, add_suffix=False
                 f"{[f.SUFFIXES for f in FORMATTERS.modules.values()]}"
             )
         return FORMATTERS.modules[formatter](
-            dataset_path, text_keys=text_keys, suffixes=target_suffixes, add_suffix=add_suffix, **kwargs
+            dataset_path,
+            text_keys=text_keys,
+            suffixes=target_suffixes,
+            add_suffix=add_suffix,
+            laioncoco_preprocessing=laioncoco_preprocessing,
+            **kwargs,
         )
 
     else:
