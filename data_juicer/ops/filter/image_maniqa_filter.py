@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import numpy as np
 from loguru import logger
 
@@ -10,6 +12,7 @@ from ..base_op import OPERATORS, Filter
 from ..op_fusion import LOADED_IMAGES
 
 torch = LazyLoader("torch")
+TF = LazyLoader("torchvision.transforms.functional")
 
 OP_NAME = "image_maniqa_filter"
 
@@ -93,13 +96,29 @@ class ImageManiqaFilter(Filter):
 
         # compute MANIQA scores
         model = get_model(self.model_key, rank, self.use_cuda())
+        device = next(model.net.parameters()).device
 
-        maniqa_scores = []
-        for image in images.values():
-            with torch.no_grad():
-                # pyiqa accepts PIL images directly
-                score = model(image)
-                maniqa_scores.append(score.item())
+        # Convert all PIL images to tensors and group by spatial size
+        # so same-sized images can be batched together for efficient
+        # GPU inference.
+        image_keys = list(images.keys())
+        tensors = []
+        for key in image_keys:
+            t = TF.to_tensor(images[key].convert("RGB"))
+            tensors.append(t)
+
+        # Group indices by (H, W) for batched inference
+        size_groups = defaultdict(list)
+        for idx, t in enumerate(tensors):
+            size_groups[(t.shape[1], t.shape[2])].append(idx)
+
+        maniqa_scores = [0.0] * len(tensors)
+        with torch.no_grad():
+            for indices in size_groups.values():
+                batch = torch.stack([tensors[i] for i in indices]).to(device)
+                scores = model.net(batch)
+                for i, idx in enumerate(indices):
+                    maniqa_scores[idx] = scores[i].item()
 
         logger.debug(f"maniqa_scores: {maniqa_scores}")
 
