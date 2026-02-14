@@ -146,7 +146,9 @@ def preprocess_laioncoco(dataset, num_proc=1):
 
     Transforms the non-standard LAION-COCO schema into the format
     expected by Data-Juicer:
-    - Extracts 'text' from the 'clean_content' JSON string
+    - Extracts 'text' from the 'clean_content' JSON string, prepended
+      with image special tokens so multimodal ops can correlate images
+      with text
     - Flattens 'image_buffer_list' structs into 'images' (IDs) and
       'image_bytes' (raw bytes) columns
 
@@ -157,19 +159,25 @@ def preprocess_laioncoco(dataset, num_proc=1):
     import json
 
     from data_juicer.core.data import NestedDataset
+    from data_juicer.utils.mm_utils import SpecialTokens
 
     logger.info("Applying LAION-COCO preprocessing...")
 
     def transform(sample):
         # 1. Extract 'text' from clean_content JSON
         clean = json.loads(sample["clean_content"])
-        sample["text"] = clean.get("text", "")
+        text = clean.get("text", "")
 
         # 2. Flatten image_buffer_list into images (IDs) and
         #    image_bytes (raw bytes)
         buf_list = sample.get("image_buffer_list", []) or []
         sample["images"] = [item["image_id"] for item in buf_list]
         sample["image_bytes"] = [item["buffer"] for item in buf_list]
+
+        # 3. Prepend image special tokens so multimodal ops can
+        #    associate images with the text
+        img_tokens = SpecialTokens.image * len(buf_list)
+        sample["text"] = img_tokens + text
 
         return sample
 
