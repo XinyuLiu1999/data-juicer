@@ -590,8 +590,26 @@ def prepare_laion_watermark_model(model_path="watermark_model_v1.pt", **model_pa
 
     device = model_params.pop("device", "cpu")
 
-    # Download weights if needed
-    model_path = check_model(model_path)
+    # Resolve model path: check local/external paths first, then download
+    if os.path.exists(model_path):
+        pass  # use as-is
+    else:
+        cached_path = os.path.join(DJMC, model_path)
+        if os.path.exists(cached_path):
+            model_path = cached_path
+        else:
+            # Download from GitHub
+            if not os.path.exists(DJMC):
+                os.makedirs(DJMC)
+            download_url = BACKUP_MODEL_LINKS.get(model_path)
+            if download_url is None:
+                raise RuntimeError(
+                    f"Model [{model_path}] not found and no download URL "
+                    f"configured. Please download it manually into {DJMC}."
+                )
+            logger.info(f"Downloading LAION watermark model to {cached_path}...")
+            wget.download(download_url, cached_path)
+            model_path = cached_path
 
     # Build model architecture
     model = timm.create_model(
