@@ -31,6 +31,7 @@ from .cache_utils import DATA_JUICER_MODELS_CACHE as DJMC
 torch = LazyLoader("torch")
 transformers = LazyLoader("transformers")
 nn = LazyLoader("torch.nn")
+timm = LazyLoader("timm")
 fasttext = LazyLoader("fasttext", "fasttext-wheel")
 sentencepiece = LazyLoader("sentencepiece")
 kenlm = LazyLoader("kenlm")
@@ -81,6 +82,8 @@ BACKUP_MODEL_LINKS = {
     # DWPose
     "dwpose_onnx_det_model": "https://huggingface.co/yzd-v/DWPose/resolve/main/yolox_l.onnx",
     "dwpose_onnx_pose_model": "https://huggingface.co/yzd-v/DWPose/resolve/main/dw-ll_ucoco_384.onnx",
+    # LAION-5B Watermark Detection
+    "watermark_model_v1.pt": "https://github.com/LAION-AI/LAION-5B-WatermarkDetection/raw/main/models/watermark_model_v1.pt",
 }
 
 
@@ -571,6 +574,53 @@ def prepare_huggingface_model(
             model = pipe
 
     return (model, processor) if return_model else processor
+
+
+def prepare_laion_watermark_model(model_path="watermark_model_v1.pt", **model_params):
+    """
+    Prepare and load the LAION-5B watermark detection model.
+
+    Uses a timm EfficientNet-B3a backbone with a custom classifier head.
+    The model weights are auto-downloaded from GitHub if not cached locally.
+
+    :param model_path: filename or local path of the .pt weights file
+    :return: a tuple (model, transforms)
+    """
+    import torchvision.transforms as T
+
+    device = model_params.pop("device", "cpu")
+
+    # Download weights if needed
+    model_path = check_model(model_path)
+
+    # Build model architecture
+    model = timm.create_model(
+        "efficientnet_b3a", pretrained=False, num_classes=2
+    )
+    model.classifier = nn.Sequential(
+        nn.Linear(in_features=1536, out_features=625),
+        nn.ReLU(),
+        nn.Dropout(p=0.3),
+        nn.Linear(in_features=625, out_features=256),
+        nn.ReLU(),
+        nn.Linear(in_features=256, out_features=2),
+    )
+
+    # Load weights
+    state_dict = torch.load(model_path, map_location="cpu")
+    if isinstance(state_dict, dict) and "weights" in state_dict:
+        state_dict = state_dict["weights"]
+    model.load_state_dict(state_dict)
+    model.eval().to(device)
+
+    # Build preprocessing transforms
+    transforms = T.Compose([
+        T.Resize((256, 256)),
+        T.ToTensor(),
+        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ])
+
+    return (model, transforms)
 
 
 def prepare_kenlm_model(lang, name_pattern="{}.arpa.bin", **model_params):
@@ -1626,6 +1676,7 @@ MODEL_FUNCTION_MAPPING = {
     "fastsam": prepare_fastsam_model,
     "huggingface": prepare_huggingface_model,
     "kenlm": prepare_kenlm_model,
+    "laion_watermark": prepare_laion_watermark_model,
     "nltk": prepare_nltk_model,
     "nltk_pos_tagger": prepare_nltk_pos_tagger,
     "opencv_classifier": prepare_opencv_classifier,

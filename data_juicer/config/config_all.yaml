@@ -728,7 +728,8 @@ process:
       any_or_all: any                                         # keep this sample when any/all images meet the filter condition
       memory: '1500MB'                                  # This operation (Op) utilizes deep neural network models that consume a significant amount of memory for computation, hence the system's available memory might constrain the maximum number of processes that can be launched
   - image_watermark_filter:                                 # filter samples according to the predicted watermark probabilities of images in them
-      hf_watermark_model: amrul-hzz/watermark_detector        # Huggingface model name for watermark classification
+      hf_watermark_model: amrul-hzz/watermark_detector        # Huggingface model name for watermark classification. Only used when watermark_model_type is 'huggingface'.
+      watermark_model_type: huggingface                       # type of watermark detection model: 'huggingface' (default) or 'laion' (LAION-5B EfficientNet-B3a, auto-downloaded from GitHub)
       prob_threshold: 0.8                                     # the predicted watermark probability threshold for samples, range from 0 to 1. Samples with watermark probability less than this threshold will be kept.
       any_or_all: any                                         # keep this sample when any/all images meet the filter condition
       memory: '500MB'                                   # This operation (Op) utilizes deep neural network models that consume a significant amount of memory for computation, hence the system's available memory might constrain the maximum number of processes that can be launched

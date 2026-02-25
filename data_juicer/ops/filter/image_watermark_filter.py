@@ -16,15 +16,17 @@ OP_NAME = "image_watermark_filter"
 @OPERATORS.register_module(OP_NAME)
 @LOADED_IMAGES.register_module(OP_NAME)
 class ImageWatermarkFilter(Filter):
-    """Filter to keep samples whose images have no watermark with high probability.
+    """Filter to keep samples whose images have no watermark with high
+    probability.
 
-    This operator uses a Hugging Face watermark detection model to filter samples based on
-    the presence of watermarks in their images. It keeps samples where the predicted
-    watermark probability is below a specified threshold. The operator supports two
-    strategies: 'any' (keep if any image meets the condition) and 'all' (keep only if all
-    images meet the condition). The key metric 'image_watermark_prob' is computed for each
-    image, representing the probability that the image contains a watermark. If no images
-    are present in the sample, the metric is set to an empty array."""
+    This operator uses a watermark detection model to filter samples based on
+    the presence of watermarks in their images. It keeps samples where the
+    predicted watermark probability is below a specified threshold. The operator
+    supports two strategies: 'any' (keep if any image meets the condition) and
+    'all' (keep only if all images meet the condition). The key metric
+    'image_watermark_prob' is computed for each image, representing the
+    probability that the image contains a watermark. If no images are present
+    in the sample, the metric is set to an empty array."""
 
     _accelerator = "cuda"
 
@@ -32,6 +34,7 @@ class ImageWatermarkFilter(Filter):
         self,
         hf_watermark_model: str = "amrul-hzz/watermark_detector",
         trust_remote_code: bool = False,
+        watermark_model_type: str = "huggingface",
         prob_threshold: float = 0.8,
         any_or_all: str = "any",
         *args,
@@ -41,8 +44,14 @@ class ImageWatermarkFilter(Filter):
         Initialization method.
 
         :param hf_watermark_model: watermark detection model name on
-            huggingface.
-        :param trust_remote_code: whether to trust the remote code of HF models.
+            huggingface. Only used when watermark_model_type is 'huggingface'.
+        :param trust_remote_code: whether to trust the remote code of HF
+            models. Only used when watermark_model_type is 'huggingface'.
+        :param watermark_model_type: type of watermark detection model to use.
+            'huggingface': use a HuggingFace transformers model (default).
+            'laion': use the LAION-5B watermark detection model (timm
+            EfficientNet-B3a). The LAION model weights are auto-downloaded
+            from GitHub on first use.
         :param prob_threshold: the predicted watermark probability threshold
             for samples. range from 0 to 1. Samples with watermark probability
             less than this threshold will be kept.
@@ -59,11 +68,23 @@ class ImageWatermarkFilter(Filter):
         if any_or_all not in ["any", "all"]:
             raise ValueError(f"Keep strategy [{any_or_all}] is not supported. " f'Can only be one of ["any", "all"].')
         self.any = any_or_all == "any"
-        self.model_key = prepare_model(
-            model_type="huggingface",
-            pretrained_model_name_or_path=hf_watermark_model,
-            trust_remote_code=trust_remote_code,
-        )
+        self.watermark_model_type = watermark_model_type
+
+        if watermark_model_type == "laion":
+            self.model_key = prepare_model(
+                model_type="laion_watermark",
+            )
+        elif watermark_model_type == "huggingface":
+            self.model_key = prepare_model(
+                model_type="huggingface",
+                pretrained_model_name_or_path=hf_watermark_model,
+                trust_remote_code=trust_remote_code,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported watermark_model_type [{watermark_model_type}]. "
+                f'Can only be one of ["huggingface", "laion"].'
+            )
 
     def compute_stats_single(self, sample, rank=None, context=False):
         # check if it's computed already
@@ -84,10 +105,20 @@ class ImageWatermarkFilter(Filter):
         model, processor = get_model(self.model_key, rank, self.use_cuda())
 
         images = [images[key] for key in images]
-        inputs = processor(images=images, return_tensors="pt").to(model.device)
-        outputs = model(**inputs)
-        logits = outputs.logits
-        watermark_probs = [float(probs[1]) for probs in torch.softmax(logits, dim=-1)]
+
+        if self.watermark_model_type == "laion":
+            # LAION model: use torchvision transforms, softmax[0] = watermark
+            device = next(model.parameters()).device
+            batch = torch.stack([processor(img.convert("RGB")) for img in images]).to(device)
+            with torch.no_grad():
+                logits = model(batch)
+            watermark_probs = [float(probs[0]) for probs in torch.softmax(logits, dim=-1)]
+        else:
+            # HuggingFace model: use AutoProcessor, softmax[1] = watermark
+            inputs = processor(images=images, return_tensors="pt").to(model.device)
+            outputs = model(**inputs)
+            logits = outputs.logits
+            watermark_probs = [float(probs[1]) for probs in torch.softmax(logits, dim=-1)]
 
         sample[Fields.stats][StatsKeys.image_watermark_prob] = watermark_probs
 
