@@ -608,7 +608,22 @@ def prepare_laion_watermark_model(model_path="watermark_model_v1.pt", **model_pa
                     f"configured. Please download it manually into {DJMC}."
                 )
             logger.info(f"Downloading LAION watermark model to {cached_path}...")
-            wget.download(download_url, cached_path)
+            tmp_path = cached_path + ".tmp"
+            try:
+                with httpx.stream(
+                    "GET", download_url,
+                    follow_redirects=True,
+                    timeout=300,
+                ) as resp:
+                    resp.raise_for_status()
+                    with open(tmp_path, "wb") as f:
+                        for chunk in resp.iter_bytes(chunk_size=1024 * 1024):
+                            f.write(chunk)
+                os.rename(tmp_path, cached_path)
+            except Exception:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                raise
             model_path = cached_path
 
     # Build model architecture
