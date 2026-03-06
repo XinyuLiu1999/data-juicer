@@ -83,6 +83,9 @@ class MetaKeys(object):
 
     # # pose information
     pose_info = "pose_info"
+    # # OCR results
+    image_ocr_tag = "image_ocr_tag"
+    image_ocr_difficulty = "image_ocr_difficulty"
 
     # === info extraction related tags ===
     # # for event extraction
