@@ -197,11 +197,14 @@ def load_images_byte(paths):
 
 
 def load_image(path_or_bytes):
-    if isinstance(path_or_bytes, bytes):
-        img = PIL.Image.open(io.BytesIO(path_or_bytes))
-    else:
-        img_feature = Image()
-        img = img_feature.decode_example(img_feature.encode_example(path_or_bytes))
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning, message=".*Palette images with Transparency.*")
+        if isinstance(path_or_bytes, bytes):
+            img = PIL.Image.open(io.BytesIO(path_or_bytes))
+        else:
+            img_feature = Image()
+            img = img_feature.decode_example(img_feature.encode_example(path_or_bytes))
     img = img.convert("RGB")
     return img
 

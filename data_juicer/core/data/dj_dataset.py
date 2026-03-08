@@ -318,6 +318,11 @@ class NestedDataset(Dataset, DJDataset):
                     "kept_ratio": after_count / before_count if before_count > 0 else 1.0,
                     "time_s": round(end - start, 3),
                 })
+                if work_dir:
+                    trace_dir = os.path.join(work_dir, "trace")
+                    os.makedirs(trace_dir, exist_ok=True)
+                    with open(os.path.join(trace_dir, "filter_stats.json"), "w") as out:
+                        json.dump(filter_stats_list, out, indent=2)
                 logger.info(
                     f"[{idx}/{op_num}] OP [{op._name}] Done in " f"{end - start:.3f}s. Left {len(dataset)} samples."
                 )
@@ -346,11 +351,6 @@ class NestedDataset(Dataset, DJDataset):
                 with open(os.path.join(monitor_dir, "monitor.json"), "w") as out:
                     json.dump(resource_util_list, out)
                 Monitor.draw_resource_util_graph(resource_util_list, monitor_dir)
-            if work_dir and filter_stats_list:
-                tracer_dir = os.path.join(work_dir, "tracer")
-                os.makedirs(tracer_dir, exist_ok=True)
-                with open(os.path.join(tracer_dir, "filter_stats.json"), "w") as out:
-                    json.dump(filter_stats_list, out, indent=2)
             # make summarization on the insight mining results
             if work_dir and enable_insight_mining:
                 logger.info("Insight mining for each OP...")
