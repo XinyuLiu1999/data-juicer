@@ -96,7 +96,7 @@ def find_files_with_suffix(
         files = [path]
     else:
         searched_files = path.rglob("*")
-        files = [file for file in searched_files if file.is_file()]
+        files = sorted([file for file in searched_files if file.is_file()])
 
     extractor = Extractor
 
