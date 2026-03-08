@@ -69,9 +69,87 @@ def set_dataset_to_absolute_path(dataset, dataset_path, cfg):
     return dataset
 
 
+def preprocess_laioncoco_ray(table: pyarrow.Table, image_special_token: str) -> pyarrow.Table:
+    """
+    Ray-compatible LAION-COCO preprocessing operating on PyArrow tables.
+
+    Transforms the non-standard LAION-COCO schema into the format
+    expected by Data-Juicer:
+    - Extracts 'text' from the 'clean_content' JSON string, prepended
+      with image special tokens
+    - Flattens 'image_buffer_list' structs into 'images' (IDs) and
+      'image_bytes' (raw bytes) columns
+    """
+    import json
+
+    samples = table.to_pydict()
+    num_rows = len(samples.get("clean_content", []))
+    images_col = []
+    image_bytes_col = []
+    text_col = []
+
+    for i in range(num_rows):
+        try:
+            # Extract text from clean_content JSON
+            raw_content = samples["clean_content"][i]
+            if raw_content is None:
+                text_col.append("")
+                images_col.append([])
+                image_bytes_col.append([])
+                continue
+            clean = json.loads(raw_content)
+            text = clean.get("text", "")
+
+            # Flatten image_buffer_list
+            buf_list = samples.get("image_buffer_list", [None] * num_rows)[i]
+            buf_list = buf_list if buf_list else []
+            img_ids = [item.get("image_id", "") for item in buf_list
+                       if isinstance(item, dict)]
+            img_bytes = [item.get("buffer", b"") for item in buf_list
+                         if isinstance(item, dict)]
+
+            # Prepend image special tokens
+            img_tokens = image_special_token * len(img_ids)
+            text_col.append(img_tokens + text)
+            images_col.append(img_ids)
+            image_bytes_col.append(img_bytes)
+        except Exception as e:
+            # Log error without dumping binary data
+            logger.warning(
+                f"LAION-COCO preprocessing: skipping row {i}, "
+                f"error: {type(e).__name__}: {str(e)[:200]}"
+            )
+            text_col.append("")
+            images_col.append([])
+            image_bytes_col.append([])
+
+    samples["text"] = text_col
+    samples["images"] = images_col
+    samples["image_bytes"] = image_bytes_col
+
+    # Remove original complex columns
+    for col in ["clean_content", "image_buffer_list"]:
+        if col in samples:
+            del samples[col]
+
+    return pyarrow.Table.from_pydict(samples)
+
+
 def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg) -> ray.data.Dataset:
     if dataset_path:
         dataset = set_dataset_to_absolute_path(dataset, dataset_path, cfg)
+
+    if cfg and getattr(cfg, "laioncoco_preprocessing", False):
+        from data_juicer.utils.mm_utils import SpecialTokens
+
+        logger.info("Applying LAION-COCO preprocessing for Ray dataset...")
+        dataset = dataset.map_batches(
+            partial(preprocess_laioncoco_ray,
+                    image_special_token=SpecialTokens.image),
+            batch_format="pyarrow",
+            batch_size=DEFAULT_BATCH_SIZE,
+        )
+
     return dataset
 
 
