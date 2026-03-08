@@ -14,24 +14,79 @@ import numpy as np
 import pandas as pd
 
 
-def to_bytes(val):
-    """Coerce a value to bytes if possible, else return None."""
-    if val is None:
+# Map op name keywords to the __dj__stats__ key most relevant for that filter
+OP_STAT_HINTS = {
+    "image_text_matching": "image_text_similarity",
+    "image_text_similarity": "image_text_similarity",
+    "image_aesthetics": "image_aesthetics_scores",
+    "image_blurriness": "image_blurriness_scores",
+    "image_brightness": "image_brightness_scores",
+    "image_entropy": "image_entropy_scores",
+    "image_aspect_ratio": "aspect_ratios",
+    "image_shape": ["image_width", "image_height"],
+    "image_size": "image_sizes",
+    "image_border_variance": "image_border_variance_scores",
+    "image_nsfw": "image_nsfw_scores",
+    "image_watermark": "image_watermark_scores",
+    "image_safe_aigc": "image_safe_aigc_scores",
+    "perplexity": "perplexity",
+    "character_repetition": "char_rep_ratio",
+    "flagged_words": "flagged_words_ratio",
+    "special_characters": "special_char_ratio",
+}
+
+
+def get_stat_value(stats_dict, op_name):
+    """Extract the most relevant stat value for display given an op name."""
+    if not isinstance(stats_dict, dict):
         return None
-    if isinstance(val, (bytes, bytearray)):
-        return bytes(val)
-    if isinstance(val, memoryview):
-        return bytes(val)
-    if isinstance(val, np.ndarray):
-        return val.tobytes()
-    # list of ints (byte array stored as list)
-    if isinstance(val, list) and val and isinstance(val[0], int):
-        return bytes(val)
+    for key, stat_key in OP_STAT_HINTS.items():
+        if key in op_name:
+            if isinstance(stat_key, list):
+                parts = []
+                for sk in stat_key:
+                    v = stats_dict.get(sk)
+                    if v is not None:
+                        parts.append(f"{sk}: {_format_stat(v)}")
+                return ", ".join(parts) if parts else None
+            else:
+                v = stats_dict.get(stat_key)
+                if v is not None:
+                    return f"{stat_key}: {_format_stat(v)}"
     return None
 
 
-def bytes_to_base64_img(raw):
-    """Convert raw bytes to an <img> HTML tag with embedded base64 data."""
+def _format_stat(v):
+    if isinstance(v, (np.ndarray, list)):
+        vals = list(v) if isinstance(v, np.ndarray) else v
+        if len(vals) == 1:
+            return f"{vals[0]:.4f}" if isinstance(vals[0], float) else str(vals[0])
+        return "[" + ", ".join(f"{x:.4f}" if isinstance(x, float) else str(x) for x in vals[:3]) + "]"
+    if isinstance(v, float):
+        return f"{v:.4f}"
+    return str(v)
+
+
+def extract_image_bytes(row):
+    """Extract first image bytes from image_bytes column (numpy array of bytes)."""
+    val = row.get("image_bytes")
+    if val is None:
+        return None
+    # numpy array of bytes objects
+    if isinstance(val, np.ndarray):
+        if len(val) == 0:
+            return None
+        raw = val[0]
+        return bytes(raw) if not isinstance(raw, bytes) else raw
+    if isinstance(val, (bytes, bytearray)):
+        return bytes(val)
+    if isinstance(val, list) and val:
+        raw = val[0]
+        return bytes(raw) if not isinstance(raw, bytes) else raw
+    return None
+
+
+def bytes_to_img_tag(raw):
     if raw is None:
         return None
     if raw[:8] == b'\x89PNG\r\n\x1a\n':
@@ -40,32 +95,12 @@ def bytes_to_base64_img(raw):
         mime = "image/jpeg"
     elif raw[:4] == b'GIF8':
         mime = "image/gif"
-    elif raw[:4] == b'RIFF' and raw[8:12] == b'WEBP':
+    elif raw[:4] == b'RIFF' and len(raw) > 12 and raw[8:12] == b'WEBP':
         mime = "image/webp"
     else:
         mime = "image/jpeg"
     b64 = base64.b64encode(raw).decode("utf-8")
     return f'<img src="data:{mime};base64,{b64}">'
-
-
-def find_image_bytes_column(df):
-    """Find the column most likely containing binary image data."""
-    # Prefer columns named image_bytes, then any bytes column
-    preferred = ["image_bytes", "image", "img", "bytes"]
-    candidates = []
-    for col in df.columns:
-        sample = df[col].dropna().iloc[0] if not df[col].dropna().empty else None
-        if to_bytes(sample) is not None:
-            candidates.append(col)
-    for p in preferred:
-        if p in candidates:
-            return p
-    return candidates[0] if candidates else None
-
-
-def is_binary_col(series):
-    sample = series.dropna().iloc[0] if not series.dropna().empty else None
-    return to_bytes(sample) is not None
 
 
 def load_filter_parquets(trace_dir):
@@ -75,32 +110,33 @@ def load_filter_parquets(trace_dir):
     for fname in sorted(os.listdir(trace_dir)):
         if fname.startswith("filter-") and fname.endswith(".parquet"):
             op_name = fname[len("filter-"):-len(".parquet")]
-            path = os.path.join(trace_dir, fname)
             try:
-                result[op_name] = pd.read_parquet(path)
+                result[op_name] = pd.read_parquet(os.path.join(trace_dir, fname))
             except Exception as e:
                 print(f"Warning: could not load {fname}: {e}")
     return result
 
 
-def render_sample_card(row, img_col, meta_cols, idx):
-    """Render a single sample card as HTML."""
-    img_html = "<div class='no-img'>no image</div>"
-    if img_col:
-        raw = to_bytes(row.get(img_col))
-        tag = bytes_to_base64_img(raw)
-        if tag:
-            img_html = tag
+def render_card(row, op_name, idx):
+    raw = extract_image_bytes(row)
+    img_tag = bytes_to_img_tag(raw)
+    img_html = img_tag if img_tag else "<div class='no-img'>no image</div>"
 
-    meta_html = ""
-    for col in meta_cols:
-        val = row.get(col)
-        if val is not None and str(val).strip():
-            meta_html += f"<div><span class='col-name'>{col}:</span> <span class='col-val'>{str(val)[:300]}</span></div>"
+    # Text caption
+    text = row.get("text") or row.get("caption") or ""
+    text_html = f"<div class='card-text'>{str(text)[:200]}</div>" if text else ""
 
-    return f"""<div class="card" id="card-{idx}">
+    # Relevant stat
+    stat_html = ""
+    stats = row.get("__dj__stats__")
+    stat_val = get_stat_value(stats, op_name)
+    if stat_val:
+        stat_html = f"<div class='card-stat'>{stat_val}</div>"
+
+    return f"""<div class="card">
   <div class="card-img">{img_html}</div>
-  <div class="card-meta">{meta_html}</div>
+  {text_html}
+  {stat_html}
 </div>"""
 
 
@@ -111,36 +147,26 @@ def build_op_panel(op_name, entry, df, max_samples):
     time_s = entry.get("time_s", "-")
 
     stats_html = f"""<div class="op-stats">
-      <span class="stat-item filtered">Filtered: {filtered:,} ({(1-kept_ratio)*100:.1f}%)</span>
-      <span class="stat-item kept">Kept: {entry.get('after',0):,} ({kept_ratio*100:.1f}%)</span>
-      <span class="stat-item">Before: {before:,}</span>
-      <span class="stat-item">Time: {time_s}s</span>
-    </div>"""
+  <span class="stat-item s-filtered">Filtered: {filtered:,} ({(1-kept_ratio)*100:.1f}%)</span>
+  <span class="stat-item s-kept">Kept: {entry.get('after',0):,} ({kept_ratio*100:.1f}%)</span>
+  <span class="stat-item">Before: {before:,}</span>
+  <span class="stat-item">Time: {time_s}s</span>
+</div>"""
 
     if df is None or len(df) == 0:
-        return f"""<div class="op-panel" id="panel-{op_name}" style="display:none">
-      <h2>{op_name}</h2>{stats_html}
-      <p class="no-samples">No trace parquet found or no filtered samples.</p>
-    </div>"""
-
-    img_col = find_image_bytes_column(df)
-    meta_cols = [c for c in df.columns
-                 if c != img_col and not is_binary_col(df[c])]
-    # exclude very long / unhelpful columns
-    meta_cols = [c for c in meta_cols if c not in ("__dj__stats__",)][:8]
-
-    sample_df = df.head(max_samples)
-    cards = [render_sample_card(row, img_col, meta_cols, f"{op_name}-{i}")
-             for i, (_, row) in enumerate(sample_df.iterrows())]
+        body = "<p class='no-samples'>No trace parquet found or no filtered samples recorded.</p>"
+    else:
+        cards = [render_card(row, op_name, i) for i, (_, row) in enumerate(df.head(max_samples).iterrows())]
+        body = f"<div class='cards'>{''.join(cards)}</div>"
 
     return f"""<div class="op-panel" id="panel-{op_name}" style="display:none">
   <h2>{op_name}</h2>
   {stats_html}
-  <div class="cards">{''.join(cards)}</div>
+  {body}
 </div>"""
 
 
-def build_html(trace_dir, max_samples=10):
+def build_html(trace_dir, max_samples=20):
     stats_path = os.path.join(trace_dir, "filter_stats.json")
     filter_stats = []
     if os.path.exists(stats_path):
@@ -151,26 +177,22 @@ def build_html(trace_dir, max_samples=10):
 
     filter_parquets = load_filter_parquets(trace_dir)
 
-    # Summary table rows (clickable)
     summary_rows = []
     for entry in filter_stats:
         op = entry["op"]
         kept_ratio = entry.get("kept_ratio", 1.0)
-        has_panel = "has-panel" if (filter_parquets.get(op) is not None and len(filter_parquets.get(op, [])) > 0) else ""
+        has_panel = "has-panel" if filter_parquets.get(op) is not None else ""
         summary_rows.append(f"""<tr class="summary-row {has_panel}" onclick="showPanel('{op}')" data-op="{op}">
-          <td>{op}</td>
-          <td>{entry['before']:,}</td>
-          <td>{entry['after']:,}</td>
-          <td class="filtered">{entry['filtered']:,} ({(1-kept_ratio)*100:.1f}%)</td>
-          <td class="kept">{kept_ratio*100:.1f}%</td>
-          <td>{entry.get('time_s','-')}s</td>
-        </tr>""")
+  <td>{op}</td>
+  <td>{entry['before']:,}</td>
+  <td>{entry['after']:,}</td>
+  <td class="filtered">{entry['filtered']:,} ({(1-kept_ratio)*100:.1f}%)</td>
+  <td class="kept">{kept_ratio*100:.1f}%</td>
+  <td>{entry.get('time_s','-')}s</td>
+</tr>""")
 
-    # Op panels
-    panels = []
-    for entry in filter_stats:
-        op = entry["op"]
-        panels.append(build_op_panel(op, entry, filter_parquets.get(op), max_samples))
+    panels = [build_op_panel(op, entry, filter_parquets.get(op), max_samples)
+              for entry in filter_stats for op in [entry["op"]]]
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -178,60 +200,61 @@ def build_html(trace_dir, max_samples=10):
 <meta charset="UTF-8">
 <title>Data-Juicer Filter Report</title>
 <style>
-  * {{ box-sizing: border-box; }}
-  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; background: #f0f2f5; color: #222; }}
-  h1 {{ margin: 0; padding: 20px 32px; background: #1a1a2e; color: #fff; font-size: 22px; }}
-  .layout {{ display: flex; height: calc(100vh - 60px); }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; }}
 
-  /* Left sidebar */
-  .sidebar {{ width: 420px; min-width: 320px; background: #fff; border-right: 1px solid #dde; overflow-y: auto; padding: 16px; }}
-  .sidebar h2 {{ font-size: 14px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 12px; }}
-  table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}
-  th {{ background: #f7f7f9; padding: 8px 10px; text-align: left; color: #555; font-weight: 600; border-bottom: 2px solid #eee; }}
-  td {{ padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }}
-  .summary-row {{ cursor: default; }}
+  header {{ padding: 16px 28px; background: #1a1a2e; color: #fff; font-size: 20px; font-weight: 700; letter-spacing: 0.02em; }}
+
+  .layout {{ display: flex; height: calc(100vh - 52px); }}
+
+  /* Sidebar */
+  .sidebar {{ width: 480px; min-width: 360px; background: #fff; border-right: 1px solid #dde; overflow-y: auto; padding: 16px; }}
+  .sidebar-title {{ font-size: 11px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }}
+  table {{ border-collapse: collapse; width: 100%; font-size: 12.5px; }}
+  th {{ background: #f7f7f9; padding: 7px 9px; text-align: left; color: #666; font-weight: 600; border-bottom: 2px solid #eee; white-space: nowrap; }}
+  td {{ padding: 7px 9px; border-bottom: 1px solid #f2f2f2; white-space: nowrap; }}
+  .summary-row {{ cursor: default; transition: background 0.1s; }}
   .summary-row.has-panel {{ cursor: pointer; }}
-  .summary-row.has-panel:hover {{ background: #f0f4ff; }}
-  .summary-row.active {{ background: #e8efff; font-weight: 600; }}
+  .summary-row.has-panel:hover td:first-child {{ text-decoration: underline; }}
+  .summary-row.has-panel:hover {{ background: #f4f6ff; }}
+  .summary-row.active {{ background: #e8eeff !important; }}
   .filtered {{ color: #c0392b; font-weight: 600; }}
   .kept {{ color: #27ae60; font-weight: 600; }}
 
-  /* Right panel */
-  .panel-area {{ flex: 1; overflow-y: auto; padding: 24px 32px; }}
-  .op-panel h2 {{ font-size: 20px; margin: 0 0 12px; color: #1a1a2e; }}
-  .op-stats {{ display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }}
-  .stat-item {{ background: #f7f7f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 6px 14px; font-size: 13px; }}
-  .stat-item.filtered {{ background: #fff0ee; border-color: #f5c6c0; color: #c0392b; }}
-  .stat-item.kept {{ background: #eefaf3; border-color: #b2e0c6; color: #27ae60; }}
+  /* Panel area */
+  .panel-area {{ flex: 1; overflow-y: auto; padding: 28px 32px; }}
+  .placeholder {{ color: #bbb; text-align: center; margin-top: 100px; font-size: 15px; }}
+
+  .op-panel h2 {{ font-size: 18px; font-weight: 700; color: #1a1a2e; margin-bottom: 14px; word-break: break-all; }}
+  .op-stats {{ display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }}
+  .stat-item {{ background: #f7f7f9; border: 1px solid #e2e2e2; border-radius: 6px; padding: 5px 13px; font-size: 13px; }}
+  .stat-item.s-filtered {{ background: #fff0ee; border-color: #f5c6c0; color: #c0392b; font-weight: 600; }}
+  .stat-item.s-kept {{ background: #eefaf3; border-color: #b2e0c6; color: #27ae60; font-weight: 600; }}
 
   /* Cards */
-  .cards {{ display: flex; flex-wrap: wrap; gap: 16px; }}
-  .card {{ background: #fff; border: 1px solid #e4e4e4; border-radius: 8px; padding: 12px; width: 220px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: box-shadow 0.2s; }}
-  .card:hover {{ box-shadow: 0 4px 12px rgba(0,0,0,0.12); }}
-  .card-img {{ text-align: center; margin-bottom: 10px; min-height: 40px; }}
-  .card-img img {{ max-width: 196px; max-height: 196px; object-fit: contain; border-radius: 4px; }}
-  .no-img {{ color: #bbb; font-size: 12px; padding: 20px 0; }}
-  .card-meta {{ font-size: 11px; color: #666; word-break: break-word; }}
-  .col-name {{ font-weight: 700; color: #444; }}
-  .col-val {{ color: #555; }}
-  .card-meta div {{ margin-bottom: 4px; }}
-
-  .no-samples {{ color: #999; font-style: italic; }}
-  .placeholder {{ color: #aaa; text-align: center; margin-top: 80px; font-size: 16px; }}
+  .cards {{ display: flex; flex-wrap: wrap; gap: 14px; }}
+  .card {{ background: #fff; border: 1px solid #e4e4e4; border-radius: 8px; padding: 10px; width: 200px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: box-shadow 0.15s; }}
+  .card:hover {{ box-shadow: 0 4px 14px rgba(0,0,0,0.10); }}
+  .card-img {{ text-align: center; margin-bottom: 8px; background: #fafafa; border-radius: 4px; min-height: 36px; display:flex; align-items:center; justify-content:center; }}
+  .card-img img {{ max-width: 180px; max-height: 180px; object-fit: contain; border-radius: 4px; display: block; }}
+  .no-img {{ color: #ccc; font-size: 11px; padding: 16px; }}
+  .card-text {{ font-size: 11px; color: #555; margin-bottom: 5px; line-height: 1.4; word-break: break-word; }}
+  .card-stat {{ font-size: 11px; font-weight: 700; color: #c0392b; background: #fff5f4; border-radius: 4px; padding: 3px 7px; word-break: break-all; }}
+  .no-samples {{ color: #aaa; font-style: italic; margin-top: 16px; }}
 </style>
 </head>
 <body>
-<h1>Data-Juicer Filter Report</h1>
+<header>Data-Juicer Filter Report</header>
 <div class="layout">
   <div class="sidebar">
-    <h2>Filter Summary</h2>
+    <div class="sidebar-title">Filter Summary — click to inspect</div>
     <table>
-      <thead><tr><th>Operator</th><th>Before</th><th>After</th><th>Filtered</th><th>Kept</th><th>Time</th></tr></thead>
+      <thead><tr><th>Operator</th><th>Before</th><th>After</th><th>Filtered</th><th>Kept%</th><th>Time</th></tr></thead>
       <tbody>{''.join(summary_rows)}</tbody>
     </table>
   </div>
   <div class="panel-area" id="panel-area">
-    <div class="placeholder" id="placeholder">← Click a filter to see filtered samples</div>
+    <div class="placeholder" id="placeholder">← Select a filter to view filtered samples</div>
     {''.join(panels)}
   </div>
 </div>
@@ -253,14 +276,13 @@ def build_html(trace_dir, max_samples=10):
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize Data-Juicer filter results as HTML.")
-    parser.add_argument("--trace_dir", required=True, help="Path to the trace directory (contains filter_stats.json and filter-*.parquet)")
+    parser.add_argument("--trace_dir", required=True, help="Path to the trace directory")
     parser.add_argument("--output", default="filter_report.html", help="Output HTML file path")
     parser.add_argument("--max_samples", type=int, default=20, help="Max filtered samples to show per op")
     args = parser.parse_args()
 
     print(f"Loading from: {args.trace_dir}")
     html = build_html(args.trace_dir, max_samples=args.max_samples)
-
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(html)
     print(f"Report written to: {args.output}")
