@@ -285,12 +285,14 @@ class NestedDataset(Dataset, DJDataset):
 
         dataset = self
         op_num = len(operators)
+        filter_stats_list = []
         try:
             for idx, op in enumerate(operators, start=1):
                 mp_context = ["forkserver", "spawn"] if (op.use_cuda() or op._name in unforkable_operators) else None
                 setup_mp(mp_context)
 
                 start = time()
+                before_count = len(dataset)
                 # run single op
                 run_args = {
                     "dataset": dataset,
@@ -307,6 +309,15 @@ class NestedDataset(Dataset, DJDataset):
                 if open_monitor:
                     resource_util_list.append(resource_util_per_op)
                 end = time()
+                after_count = len(dataset)
+                filter_stats_list.append({
+                    "op": op._name,
+                    "before": before_count,
+                    "after": after_count,
+                    "filtered": before_count - after_count,
+                    "kept_ratio": after_count / before_count if before_count > 0 else 1.0,
+                    "time_s": round(end - start, 3),
+                })
                 logger.info(
                     f"[{idx}/{op_num}] OP [{op._name}] Done in " f"{end - start:.3f}s. Left {len(dataset)} samples."
                 )
@@ -335,6 +346,11 @@ class NestedDataset(Dataset, DJDataset):
                 with open(os.path.join(monitor_dir, "monitor.json"), "w") as out:
                     json.dump(resource_util_list, out)
                 Monitor.draw_resource_util_graph(resource_util_list, monitor_dir)
+            if work_dir and filter_stats_list:
+                monitor_dir = os.path.join(work_dir, "monitor")
+                os.makedirs(monitor_dir, exist_ok=True)
+                with open(os.path.join(monitor_dir, "filter_stats.json"), "w") as out:
+                    json.dump(filter_stats_list, out, indent=2)
             # make summarization on the insight mining results
             if work_dir and enable_insight_mining:
                 logger.info("Insight mining for each OP...")
