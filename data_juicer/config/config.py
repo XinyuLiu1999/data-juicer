@@ -469,6 +469,14 @@ def init_configs(args: Optional[List[str]] = None, which_entry: object = None, l
                 "Only available when open_tracer is true.",
             )
             parser.add_argument(
+                "--trace_format",
+                type=str,
+                default="jsonl",
+                help="Output format for tracer files. 'jsonl' (default) or 'parquet'. "
+                "Use 'parquet' when the dataset contains binary fields such as "
+                "image bytes. Only available when open_tracer is true.",
+            )
+            parser.add_argument(
                 "--open_insight_mining",
                 type=bool,
                 default=False,

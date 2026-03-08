@@ -347,9 +347,9 @@ class NestedDataset(Dataset, DJDataset):
                     json.dump(resource_util_list, out)
                 Monitor.draw_resource_util_graph(resource_util_list, monitor_dir)
             if work_dir and filter_stats_list:
-                monitor_dir = os.path.join(work_dir, "monitor")
-                os.makedirs(monitor_dir, exist_ok=True)
-                with open(os.path.join(monitor_dir, "filter_stats.json"), "w") as out:
+                tracer_dir = os.path.join(work_dir, "tracer")
+                os.makedirs(tracer_dir, exist_ok=True)
+                with open(os.path.join(tracer_dir, "filter_stats.json"), "w") as out:
                     json.dump(filter_stats_list, out, indent=2)
             # make summarization on the insight mining results
             if work_dir and enable_insight_mining:

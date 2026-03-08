@@ -16,7 +16,7 @@ class Tracer:
     The comparison results will be stored in the work directory.
     """
 
-    def __init__(self, work_dir, op_list_to_trace=None, show_num=10, trace_keys=None):
+    def __init__(self, work_dir, op_list_to_trace=None, show_num=10, trace_keys=None, trace_format='jsonl'):
         """
         Initialization method.
 
@@ -28,6 +28,9 @@ class Tracer:
         :param trace_keys: list of field names to include in trace output.
             If set, the specified fields' values will be included in each
             trace entry.
+        :param trace_format: output format for trace files. 'jsonl'
+            (default) or 'parquet'. Use 'parquet' when the dataset
+            contains binary fields such as image bytes.
         """
         self.work_dir = os.path.join(work_dir, "trace")
         if not os.path.exists(self.work_dir):
@@ -40,6 +43,18 @@ class Tracer:
             self.op_list_to_trace = set(op_list_to_trace)
         self.show_num = show_num
         self.trace_keys = trace_keys or []
+        if trace_format not in ('jsonl', 'parquet'):
+            raise ValueError(f"trace_format must be 'jsonl' or 'parquet', got '{trace_format}'")
+        self.trace_format = trace_format
+
+    def _export_df(self, df, base_name):
+        """Export a DataFrame to the trace directory in the configured format."""
+        if self.trace_format == 'parquet':
+            res_name = f"{base_name}.parquet"
+            df.to_parquet(os.path.join(self.work_dir, res_name), index=False)
+        else:
+            res_name = f"{base_name}.jsonl"
+            df.to_json(os.path.join(self.work_dir, res_name), orient="records", lines=True, force_ascii=False)
 
     def trace_mapper(self, op_name: str, previous_ds: Dataset, processed_ds: Dataset, text_key: str):
         """
@@ -94,9 +109,8 @@ class Tracer:
             )
 
         # export the tracer results.
-        res_name = f"mapper-{op_name}.jsonl"
         dif_df = pd.DataFrame(dif_dict)
-        dif_df.to_json(os.path.join(self.work_dir, res_name), orient="records", lines=True, force_ascii=False)
+        self._export_df(dif_df, f"mapper-{op_name}")
 
     def trace_batch_mapper(self, op_name: str, previous_ds: Dataset, processed_ds: Dataset, text_key: str):
         """
@@ -127,9 +141,8 @@ class Tracer:
             logger.warning(f"There are only {len(aug_dict)} samples -- less " f"than expected {self.show_num} samples.")
 
         # export the tracer results.
-        res_name = f"mapper-{op_name}.jsonl"
         dif_df = pd.DataFrame(aug_dict)
-        dif_df.to_json(os.path.join(self.work_dir, res_name), orient="records", lines=True, force_ascii=False)
+        self._export_df(dif_df, f"mapper-{op_name}")
 
     def trace_filter(self, op_name: str, previous_ds: Dataset, processed_ds: Dataset):
         """
@@ -190,9 +203,8 @@ class Tracer:
             )
 
         # export the tracer results.
-        res_name = f"filter-{op_name}.jsonl"
         filter_df = pd.DataFrame(filter_dict)
-        filter_df.to_json(os.path.join(self.work_dir, res_name), orient="records", lines=True, force_ascii=False)
+        self._export_df(filter_df, f"filter-{op_name}")
 
     def trace_deduplicator(self, op_name: str, dup_pairs: dict):
         """
@@ -244,6 +256,5 @@ class Tracer:
             )
 
         # export the tracer result.
-        res_name = f"duplicate-{op_name}.jsonl"
         dup_df = pd.DataFrame(dup_dict)
-        dup_df.to_json(os.path.join(self.work_dir, res_name), orient="records", lines=True, force_ascii=False)
+        self._export_df(dup_df, f"duplicate-{op_name}")

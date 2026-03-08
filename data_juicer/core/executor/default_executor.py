@@ -116,6 +116,7 @@ class DefaultExecutor(ExecutorBase):
                 self.cfg.op_list_to_trace,
                 show_num=self.cfg.trace_num,
                 trace_keys=self.cfg.trace_keys,
+                trace_format=self.cfg.trace_format,
             )
 
     def run(
