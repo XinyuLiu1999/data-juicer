@@ -70,9 +70,14 @@ def catch_map_batches_exception(method, skip_op_error=False, op_name=None):
 
             from loguru import logger
 
+            # Summarize sample keys/sizes without dumping binary data
+            sample_summary = {
+                k: f"[{len(v)} items]" if isinstance(v, list) else type(v).__name__
+                for k, v in samples.items()
+            }
             logger.error(
                 f"An error occurred in {op_name} when processing "
-                f'samples "{samples}" -- {type(e)}: {e} -- '
+                f'samples (keys: {sample_summary}) -- {type(e).__name__}: {e} -- '
                 f"{traceback.format_exc()}"
             )
             ret = {key: [] for key in samples.keys()}
@@ -118,9 +123,14 @@ def catch_map_single_exception(method, return_sample=True, skip_op_error=False, 
 
                 from loguru import logger
 
+                # Summarize sample keys without dumping binary data
+                sample_summary = {
+                    k: f"[{len(v)} items]" if isinstance(v, list) else type(v).__name__
+                    for k, v in sample.items()
+                }
                 logger.error(
                     f"An error occurred in {op_name} when processing "
-                    f'sample "{sample}" -- {type(e)}: {e} -- '
+                    f'sample (keys: {sample_summary}) -- {type(e).__name__}: {e} -- '
                     f"{traceback.format_exc()}"
                 )
                 ret = {key: [] for key in sample.keys()}
