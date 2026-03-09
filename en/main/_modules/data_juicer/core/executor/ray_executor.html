@@ -707,8 +707,13 @@
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Processing data with DAG monitoring...&quot;</span><span class="p">)</span>
             <span class="n">tstart</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
 
-            <span class="c1"># Get input row count before processing</span>
-            <span class="n">input_rows</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+            <span class="c1"># Skip early row counting to avoid premature materialization.</span>
+            <span class="c1"># For large datasets (e.g. 6.3T), .count() forces Ray to</span>
+            <span class="c1"># execute and materialize the entire preprocessing pipeline</span>
+            <span class="c1"># before any filters run, requiring massive intermediate</span>
+            <span class="c1"># storage. By deferring, preprocess and filter ops are fused</span>
+            <span class="c1"># into a single streaming pass.</span>
+            <span class="n">input_rows</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
 
             <span class="c1"># Pre-execute DAG monitoring (log operation start events)</span>
