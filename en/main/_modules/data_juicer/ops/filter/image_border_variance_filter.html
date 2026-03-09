@@ -1,0 +1,1100 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>data_juicer.ops.filter.image_border_variance_filter &#8212; Data Juicer</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/custom.css?v=34d13042" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../../../../_static/documentation_options.js?v=8a448e45"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../_static/copybutton.js?v=f281be69"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/data_juicer/ops/filter/image_border_variance_filter';</script>
+    <script src="../../../../_static/sidebar.js?v=3fc1065c"></script>
+    <script src="../../../../_static/switcher-mobile.js?v=07875724"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="icon" href="../../../../_static/icon.png"/>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search docs..."
+         aria-label="Search docs..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../../../_static/icon.png" class="logo__image only-light" alt=""/>
+    <img src="../../../../_static/icon.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">Data Juicer</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../docs_index.html">
+    DOCS
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../api.html">
+    API
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://datajuicer.github.io/data-juicer-sandbox/en/main/">
+    Sandbox
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://datajuicer.github.io/data-juicer-hub/en/main/">
+    Hub
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://datajuicer.github.io/data-juicer-agents/en/main/">
+    Agents
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/XinyuLiu1999/data-juicer" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+</ul></div>
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+        <div class="navbar-item"><div class="navbar-switcher-container">
+  
+  <div class="navbar-dropdown language-dropdown">
+    <button type="button" 
+            class="navbar-dropdown-trigger" 
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Select language: en">
+      <span class="switcher-icon" aria-hidden="true">🌐</span>
+      <span class="switcher-text">en</span>
+      <i class="fa-solid fa-chevron-down dropdown-icon" aria-hidden="true"></i>
+    </button>
+    <div class="navbar-dropdown-panel" role="menu">
+      <div class="dropdown-content">
+        
+          
+          
+          <a href="../../../../../../en/main/_modules/data_juicer/ops/filter/image_border_variance_filter.html"
+             class="dropdown-item active"
+             role="menuitem"
+             aria-current="true">
+            English
+          </a>
+        
+          
+          
+          <a href="../../../../../../zh_CN/main/_modules/data_juicer/ops/filter/image_border_variance_filter_ZH.html"
+             class="dropdown-item "
+             role="menuitem"
+             >
+            简体中文
+          </a>
+        
+      </div>
+    </div>
+  </div>
+  
+
+  
+  <div class="navbar-dropdown version-dropdown">
+    <button type="button" 
+            class="navbar-dropdown-trigger" 
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Select version: main">
+      <span class="switcher-icon" aria-hidden="true">📦</span>
+      <span class="switcher-text">main</span>
+      <i class="fa-solid fa-chevron-down dropdown-icon" aria-hidden="true"></i>
+    </button>
+    <div class="navbar-dropdown-panel" role="menu">
+      <div class="dropdown-content">
+        
+        <a href="../../../../../main/_modules/data_juicer/ops/filter/image_border_variance_filter.html"
+           class="dropdown-item active"
+           role="menuitem"
+           aria-current="true">
+          main
+        </a>
+        
+      </div>
+    </div>
+  </div>
+  
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../docs_index.html">
+    DOCS
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../api.html">
+    API
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://datajuicer.github.io/data-juicer-sandbox/en/main/">
+    Sandbox
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://datajuicer.github.io/data-juicer-hub/en/main/">
+    Hub
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://datajuicer.github.io/data-juicer-agents/en/main/">
+    Agents
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/XinyuLiu1999/data-juicer" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+</ul></div>
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+          <div class="navbar-item"><div class="navbar-switcher-container">
+  
+  <div class="navbar-dropdown language-dropdown">
+    <button type="button" 
+            class="navbar-dropdown-trigger" 
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Select language: en">
+      <span class="switcher-icon" aria-hidden="true">🌐</span>
+      <span class="switcher-text">en</span>
+      <i class="fa-solid fa-chevron-down dropdown-icon" aria-hidden="true"></i>
+    </button>
+    <div class="navbar-dropdown-panel" role="menu">
+      <div class="dropdown-content">
+        
+          
+          
+          <a href="../../../../../../en/main/_modules/data_juicer/ops/filter/image_border_variance_filter.html"
+             class="dropdown-item active"
+             role="menuitem"
+             aria-current="true">
+            English
+          </a>
+        
+          
+          
+          <a href="../../../../../../zh_CN/main/_modules/data_juicer/ops/filter/image_border_variance_filter_ZH.html"
+             class="dropdown-item "
+             role="menuitem"
+             >
+            简体中文
+          </a>
+        
+      </div>
+    </div>
+  </div>
+  
+
+  
+  <div class="navbar-dropdown version-dropdown">
+    <button type="button" 
+            class="navbar-dropdown-trigger" 
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Select version: main">
+      <span class="switcher-icon" aria-hidden="true">📦</span>
+      <span class="switcher-text">main</span>
+      <i class="fa-solid fa-chevron-down dropdown-icon" aria-hidden="true"></i>
+    </button>
+    <div class="navbar-dropdown-panel" role="menu">
+      <div class="dropdown-content">
+        
+        <a href="../../../../../main/_modules/data_juicer/ops/filter/image_border_variance_filter.html"
+           class="dropdown-item active"
+           role="menuitem"
+           aria-current="true">
+          main
+        </a>
+        
+      </div>
+    </div>
+  </div>
+  
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">data_juicer.ops.filter.image_border_variance_filter</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for data_juicer.ops.filter.image_border_variance_filter</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.constant</span><span class="w"> </span><span class="kn">import</span> <span class="n">Fields</span><span class="p">,</span> <span class="n">StatsKeys</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.mm_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_data_with_context</span><span class="p">,</span> <span class="n">load_image</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">..base_op</span><span class="w"> </span><span class="kn">import</span> <span class="n">OPERATORS</span><span class="p">,</span> <span class="n">Filter</span>
+
+<span class="n">SIDE_NAMES</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;top&#39;</span><span class="p">,</span> <span class="s1">&#39;bottom&#39;</span><span class="p">,</span> <span class="s1">&#39;left&#39;</span><span class="p">,</span> <span class="s1">&#39;right&#39;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_strip</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">side</span><span class="p">,</span> <span class="n">thickness_h</span><span class="p">,</span> <span class="n">thickness_w</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract a border strip from the given side of the image.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">side</span> <span class="o">==</span> <span class="s1">&#39;top&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">img</span><span class="p">[:</span><span class="n">thickness_h</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
+    <span class="k">elif</span> <span class="n">side</span> <span class="o">==</span> <span class="s1">&#39;bottom&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">img</span><span class="p">[</span><span class="o">-</span><span class="n">thickness_h</span><span class="p">:,</span> <span class="p">:,</span> <span class="p">:]</span>
+    <span class="k">elif</span> <span class="n">side</span> <span class="o">==</span> <span class="s1">&#39;left&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">img</span><span class="p">[:,</span> <span class="p">:</span><span class="n">thickness_w</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">img</span><span class="p">[:,</span> <span class="o">-</span><span class="n">thickness_w</span><span class="p">:,</span> <span class="p">:]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_adjacent_strip</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">side</span><span class="p">,</span> <span class="n">thin_px</span><span class="p">,</span> <span class="n">gap_factor</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">width_factor</span><span class="o">=</span><span class="mi">4</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract a strip adjacent (inward) to the border for comparison.</span>
+
+<span class="sd">    The adjacent strip starts at ``thin_px * gap_factor`` from the edge and</span>
+<span class="sd">    extends to ``thin_px * width_factor``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">thin_px</span> <span class="o">*</span> <span class="n">gap_factor</span>
+    <span class="n">end</span> <span class="o">=</span> <span class="n">thin_px</span> <span class="o">*</span> <span class="n">width_factor</span>
+    <span class="k">if</span> <span class="n">side</span> <span class="o">==</span> <span class="s1">&#39;bottom&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">img</span><span class="p">[</span><span class="o">-</span><span class="n">end</span><span class="p">:</span><span class="o">-</span><span class="n">start</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
+    <span class="k">elif</span> <span class="n">side</span> <span class="o">==</span> <span class="s1">&#39;top&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">img</span><span class="p">[</span><span class="n">start</span><span class="p">:</span><span class="n">end</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
+    <span class="k">elif</span> <span class="n">side</span> <span class="o">==</span> <span class="s1">&#39;left&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">img</span><span class="p">[:,</span> <span class="n">start</span><span class="p">:</span><span class="n">end</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">img</span><span class="p">[:,</span> <span class="o">-</span><span class="n">end</span><span class="p">:</span><span class="o">-</span><span class="n">start</span><span class="p">,</span> <span class="p">:]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_has_sharp_edge</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">side</span><span class="p">,</span> <span class="n">bh</span><span class="p">,</span> <span class="n">bw</span><span class="p">,</span> <span class="n">edge_threshold</span><span class="o">=</span><span class="mi">30</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return True if there is a sharp row/col brightness transition near</span>
+<span class="sd">    the border, indicating an artificial bar boundary.&quot;&quot;&quot;</span>
+    <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">side</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;top&#39;</span><span class="p">,</span> <span class="s1">&#39;bottom&#39;</span><span class="p">):</span>
+        <span class="n">depth</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">bh</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span> <span class="n">h</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">depth</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">bw</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span> <span class="n">w</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">side</span> <span class="o">==</span> <span class="s1">&#39;top&#39;</span><span class="p">:</span>
+        <span class="n">vals</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">img</span><span class="p">[</span><span class="n">y</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:])</span> <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">depth</span><span class="p">)]</span>
+    <span class="k">elif</span> <span class="n">side</span> <span class="o">==</span> <span class="s1">&#39;bottom&#39;</span><span class="p">:</span>
+        <span class="n">vals</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">img</span><span class="p">[</span><span class="n">h</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">y</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:])</span> <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">depth</span><span class="p">)]</span>
+    <span class="k">elif</span> <span class="n">side</span> <span class="o">==</span> <span class="s1">&#39;left&#39;</span><span class="p">:</span>
+        <span class="n">vals</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">img</span><span class="p">[:,</span> <span class="n">x</span><span class="p">,</span> <span class="p">:])</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">depth</span><span class="p">)]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">vals</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">img</span><span class="p">[:,</span> <span class="n">w</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">x</span><span class="p">,</span> <span class="p">:])</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">depth</span><span class="p">)]</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">vals</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="n">max_jump</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">vals</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">vals</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">vals</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">max_jump</span> <span class="o">&gt;</span> <span class="n">edge_threshold</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_uniformity_contrast</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">side</span><span class="p">,</span> <span class="n">contrast_threshold</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
+                        <span class="n">max_bar_variance</span><span class="o">=</span><span class="mf">100.0</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return True if the thin outermost border is much more uniform (low</span>
+<span class="sd">    variance) than the adjacent image content — a strong signal that the</span>
+<span class="sd">    border is an artificial flat-colour strip rather than scene content.</span>
+
+<span class="sd">    An additional ``max_bar_variance`` guard ensures the thin strip itself</span>
+<span class="sd">    is actually flat.  Natural dark regions (night sky, dark surfaces) often</span>
+<span class="sd">    have variance well above this floor even though they may be *relatively*</span>
+<span class="sd">    more uniform than the busier content beside them.&quot;&quot;&quot;</span>
+    <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+    <span class="n">thin_px</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">((</span><span class="n">h</span> <span class="k">if</span> <span class="n">side</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;top&#39;</span><span class="p">,</span> <span class="s1">&#39;bottom&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="n">w</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.01</span><span class="p">),</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">thin</span> <span class="o">=</span> <span class="n">_get_strip</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">side</span><span class="p">,</span> <span class="n">thin_px</span><span class="p">,</span> <span class="n">thin_px</span><span class="p">)</span>
+    <span class="n">adj</span> <span class="o">=</span> <span class="n">_get_adjacent_strip</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">side</span><span class="p">,</span> <span class="n">thin_px</span><span class="p">)</span>
+
+    <span class="n">thin_var</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">thin</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+    <span class="n">adj_var</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">adj</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+
+    <span class="c1"># The strip must be both (a) flat in absolute terms AND (b) much</span>
+    <span class="c1"># more uniform than the adjacent content.</span>
+    <span class="k">if</span> <span class="n">thin_var</span> <span class="o">&gt;</span> <span class="n">max_bar_variance</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="n">adj_var</span> <span class="o">/</span> <span class="p">(</span><span class="n">thin_var</span> <span class="o">+</span> <span class="mf">0.01</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">contrast_threshold</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_adjacent_brightness</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">side</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the mean brightness of image content adjacent to the border,</span>
+<span class="sd">    skipping the border strip itself.&quot;&quot;&quot;</span>
+    <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+    <span class="n">depth_h</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="mf">0.05</span><span class="p">),</span> <span class="mi">5</span><span class="p">)</span>
+    <span class="n">depth_w</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">w</span> <span class="o">*</span> <span class="mf">0.05</span><span class="p">),</span> <span class="mi">5</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">side</span> <span class="o">==</span> <span class="s1">&#39;bottom&#39;</span><span class="p">:</span>
+        <span class="n">adj</span> <span class="o">=</span> <span class="n">img</span><span class="p">[</span><span class="o">-</span><span class="p">(</span><span class="n">depth_h</span> <span class="o">*</span> <span class="mi">3</span><span class="p">):</span><span class="o">-</span><span class="p">(</span><span class="n">depth_h</span><span class="p">),</span> <span class="p">:,</span> <span class="p">:]</span>
+    <span class="k">elif</span> <span class="n">side</span> <span class="o">==</span> <span class="s1">&#39;top&#39;</span><span class="p">:</span>
+        <span class="n">adj</span> <span class="o">=</span> <span class="n">img</span><span class="p">[</span><span class="n">depth_h</span><span class="p">:</span><span class="n">depth_h</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
+    <span class="k">elif</span> <span class="n">side</span> <span class="o">==</span> <span class="s1">&#39;left&#39;</span><span class="p">:</span>
+        <span class="n">adj</span> <span class="o">=</span> <span class="n">img</span><span class="p">[:,</span> <span class="n">depth_w</span><span class="p">:</span><span class="n">depth_w</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">adj</span> <span class="o">=</span> <span class="n">img</span><span class="p">[:,</span> <span class="o">-</span><span class="p">(</span><span class="n">depth_w</span> <span class="o">*</span> <span class="mi">3</span><span class="p">):</span><span class="o">-</span><span class="p">(</span><span class="n">depth_w</span><span class="p">),</span> <span class="p">:]</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">adj</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="calc_border_score">
+<a class="viewcode-back" href="../../../../api/data_juicer.ops.filter.image_border_variance_filter.html#data_juicer.ops.filter.calc_border_score">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">calc_border_score</span><span class="p">(</span><span class="n">image</span><span class="p">,</span>
+                      <span class="n">border_ratio</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+                      <span class="n">variance_threshold</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+                      <span class="n">uniformity_threshold</span><span class="o">=</span><span class="mf">0.85</span><span class="p">,</span>
+                      <span class="n">light_bg_threshold</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>
+                      <span class="n">neutral_max_spread</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+                      <span class="n">dark_threshold</span><span class="o">=</span><span class="mi">80</span><span class="p">,</span>
+                      <span class="n">light_threshold</span><span class="o">=</span><span class="mi">220</span><span class="p">,</span>
+                      <span class="n">bar_ratio_threshold</span><span class="o">=</span><span class="mf">0.90</span><span class="p">,</span>
+                      <span class="n">edge_brightness_threshold</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+                      <span class="n">uniformity_contrast_threshold</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
+                      <span class="n">light_bar_adjacent_max_brightness</span><span class="o">=</span><span class="mi">180</span><span class="p">,</span>
+                      <span class="n">center_variance_threshold</span><span class="o">=</span><span class="mi">500</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Detect artificial borders / bars while preserving product-style images.</span>
+
+<span class="sd">    The function performs three layers of detection:</span>
+
+<span class="sd">    1. **Per-side uniform-frame detection** – each border (top / bottom /</span>
+<span class="sd">       left / right) is checked independently for low variance + high</span>
+<span class="sd">       colour uniformity.  A non-light-neutral uniform frame on ≥ 3 sides</span>
+<span class="sd">       is flagged.</span>
+<span class="sd">    2. **Dark / light bar detection** – each side is checked for a</span>
+<span class="sd">       concentration of very dark (&lt; *dark_threshold*) or very bright</span>
+<span class="sd">       (&gt; *light_threshold*) pixels, with a **multi-scale scan** to catch</span>
+<span class="sd">       thin bars missed at the default *border_ratio*.</span>
+<span class="sd">    3. **Confirmation** – candidate bars are validated via *sharp edge*</span>
+<span class="sd">       detection (abrupt brightness transition) **or** *uniformity contrast*</span>
+<span class="sd">       (bar variance ≪ adjacent content variance).  Light bars additionally</span>
+<span class="sd">       require the adjacent content to be darker than</span>
+<span class="sd">       *light_bar_adjacent_max_brightness* to avoid flagging product-style</span>
+<span class="sd">       white backgrounds.</span>
+
+<span class="sd">    Product-style images (all uniform sides are light-neutral + centre has</span>
+<span class="sd">    rich content) are explicitly **preserved**.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        image: PIL Image object.</span>
+<span class="sd">        border_ratio: Fraction of width / height used as border strip.</span>
+<span class="sd">        variance_threshold: Max mean per-channel variance for &quot;uniform&quot;.</span>
+<span class="sd">        uniformity_threshold: Min fraction of border pixels near the mean.</span>
+<span class="sd">        light_bg_threshold: Min brightness for &quot;light background&quot;.</span>
+<span class="sd">        neutral_max_spread: Max R/G/B channel spread for &quot;neutral&quot;.</span>
+<span class="sd">        dark_threshold: Max mean brightness for a &quot;dark&quot; pixel.</span>
+<span class="sd">        light_threshold: Min mean brightness for a &quot;light&quot; pixel.</span>
+<span class="sd">        bar_ratio_threshold: Min dark/light pixel fraction for a bar.</span>
+<span class="sd">        edge_brightness_threshold: Min row-to-row brightness jump for a</span>
+<span class="sd">            sharp edge.</span>
+<span class="sd">        uniformity_contrast_threshold: Min ratio (adjacent var / bar var)</span>
+<span class="sd">            to confirm bar via uniformity contrast.</span>
+<span class="sd">        light_bar_adjacent_max_brightness: Max adjacent brightness for a</span>
+<span class="sd">            light bar to be confirmed (prevents product-bg false positives).</span>
+<span class="sd">        center_variance_threshold: Min centre variance for &quot;has content&quot;.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        int: 1 if an artificial frame or bar is detected (should filter),</span>
+<span class="sd">             0 if the image is clean or product-style (should keep).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s1">&#39;RGB&#39;</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">h</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="n">bh</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">border_ratio</span><span class="p">),</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">bw</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">w</span> <span class="o">*</span> <span class="n">border_ratio</span><span class="p">),</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="c1"># Abort for very small images</span>
+    <span class="k">if</span> <span class="n">h</span> <span class="o">&lt;</span> <span class="mi">8</span> <span class="ow">or</span> <span class="n">w</span> <span class="o">&lt;</span> <span class="mi">8</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">0</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 1. Per-side analysis at default border_ratio</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="n">borders</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;top&#39;</span><span class="p">:</span>    <span class="n">img</span><span class="p">[:</span><span class="n">bh</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:],</span>
+        <span class="s1">&#39;bottom&#39;</span><span class="p">:</span> <span class="n">img</span><span class="p">[</span><span class="o">-</span><span class="n">bh</span><span class="p">:,</span> <span class="p">:,</span> <span class="p">:],</span>
+        <span class="s1">&#39;left&#39;</span><span class="p">:</span>   <span class="n">img</span><span class="p">[:,</span> <span class="p">:</span><span class="n">bw</span><span class="p">,</span> <span class="p">:],</span>
+        <span class="s1">&#39;right&#39;</span><span class="p">:</span>  <span class="n">img</span><span class="p">[:,</span> <span class="o">-</span><span class="n">bw</span><span class="p">:,</span> <span class="p">:],</span>
+    <span class="p">}</span>
+
+    <span class="n">side_info</span> <span class="o">=</span> <span class="p">{}</span>      <span class="c1"># per-side metadata</span>
+    <span class="n">frame_sides</span> <span class="o">=</span> <span class="p">[]</span>    <span class="c1"># sides that are uniform</span>
+    <span class="n">bar_sides</span> <span class="o">=</span> <span class="p">[]</span>      <span class="c1"># sides that look like dark/light bars</span>
+
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">strip</span> <span class="ow">in</span> <span class="n">borders</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">pixels</span> <span class="o">=</span> <span class="n">strip</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+        <span class="n">mean_color</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">pixels</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">var</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">pixels</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+
+        <span class="c1"># Uniformity check</span>
+        <span class="n">distances</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">pixels</span> <span class="o">-</span> <span class="n">mean_color</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">uniform_ratio</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">distances</span> <span class="o">&lt;</span> <span class="mi">30</span><span class="p">))</span>
+        <span class="n">is_uniform</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">&lt;</span> <span class="n">variance_threshold</span>
+                      <span class="ow">and</span> <span class="n">uniform_ratio</span> <span class="o">&gt;</span> <span class="n">uniformity_threshold</span><span class="p">)</span>
+
+        <span class="c1"># Dark / light bar check (brightness-based)</span>
+        <span class="n">pixel_brightness</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">pixels</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">dark_ratio</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">pixel_brightness</span> <span class="o">&lt;</span> <span class="n">dark_threshold</span><span class="p">))</span>
+        <span class="n">light_ratio</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">pixel_brightness</span> <span class="o">&gt;</span> <span class="n">light_threshold</span><span class="p">))</span>
+        <span class="n">is_dark_bar</span> <span class="o">=</span> <span class="n">dark_ratio</span> <span class="o">&gt;</span> <span class="n">bar_ratio_threshold</span>
+        <span class="n">is_light_bar</span> <span class="o">=</span> <span class="n">light_ratio</span> <span class="o">&gt;</span> <span class="n">bar_ratio_threshold</span>
+
+        <span class="c1"># Light-neutral background check (product-style guard)</span>
+        <span class="n">brightness</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">mean_color</span><span class="p">))</span>
+        <span class="n">spread</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">mean_color</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">mean_color</span><span class="p">))</span>
+        <span class="n">is_light_neutral</span> <span class="o">=</span> <span class="p">(</span><span class="n">brightness</span> <span class="o">&gt;</span> <span class="n">light_bg_threshold</span>
+                            <span class="ow">and</span> <span class="n">spread</span> <span class="o">&lt;</span> <span class="n">neutral_max_spread</span><span class="p">)</span>
+
+        <span class="n">side_info</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;is_uniform&#39;</span><span class="p">:</span> <span class="n">is_uniform</span><span class="p">,</span>
+            <span class="s1">&#39;is_dark_bar&#39;</span><span class="p">:</span> <span class="n">is_dark_bar</span><span class="p">,</span>
+            <span class="s1">&#39;is_light_bar&#39;</span><span class="p">:</span> <span class="n">is_light_bar</span><span class="p">,</span>
+            <span class="s1">&#39;is_light_neutral&#39;</span><span class="p">:</span> <span class="n">is_light_neutral</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="n">is_uniform</span><span class="p">:</span>
+            <span class="n">frame_sides</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">is_dark_bar</span> <span class="ow">or</span> <span class="n">is_light_bar</span><span class="p">:</span>
+            <span class="n">bar_sides</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 2. Multi-scale thin-bar scan</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="n">thin_bar_min_px</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">thin_bar_ratios</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.01</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">,</span> <span class="mf">0.03</span><span class="p">,</span> <span class="mf">0.04</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">]</span>
+
+    <span class="k">for</span> <span class="n">side</span> <span class="ow">in</span> <span class="n">SIDE_NAMES</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">side</span> <span class="ow">in</span> <span class="n">bar_sides</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">for</span> <span class="n">ratio</span> <span class="ow">in</span> <span class="n">thin_bar_ratios</span><span class="p">:</span>
+            <span class="n">th</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">ratio</span><span class="p">),</span> <span class="n">thin_bar_min_px</span><span class="p">)</span>
+            <span class="n">tw</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">w</span> <span class="o">*</span> <span class="n">ratio</span><span class="p">),</span> <span class="n">thin_bar_min_px</span><span class="p">)</span>
+            <span class="n">strip</span> <span class="o">=</span> <span class="n">_get_strip</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">side</span><span class="p">,</span> <span class="n">th</span><span class="p">,</span> <span class="n">tw</span><span class="p">)</span>
+            <span class="n">pixels</span> <span class="o">=</span> <span class="n">strip</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+            <span class="n">brightness</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">pixels</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+            <span class="n">dr</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">brightness</span> <span class="o">&lt;</span> <span class="n">dark_threshold</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">dr</span> <span class="o">&gt;</span> <span class="n">bar_ratio_threshold</span><span class="p">:</span>
+                <span class="n">bar_sides</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">side</span><span class="p">)</span>
+                <span class="n">side_info</span><span class="p">[</span><span class="n">side</span><span class="p">][</span><span class="s1">&#39;is_dark_bar&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">break</span>
+
+            <span class="n">lr</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">brightness</span> <span class="o">&gt;</span> <span class="n">light_threshold</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">lr</span> <span class="o">&gt;</span> <span class="n">bar_ratio_threshold</span><span class="p">:</span>
+                <span class="n">bar_sides</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">side</span><span class="p">)</span>
+                <span class="n">side_info</span><span class="p">[</span><span class="n">side</span><span class="p">][</span><span class="s1">&#39;is_light_bar&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">break</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 3. Confirm candidate bars (sharp edge OR uniformity contrast)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Both confirmation paths now also check absolute brightness of the</span>
+    <span class="c1"># thin strip to ensure it is in true bar territory, not just a</span>
+    <span class="c1"># natural dark/light region of the scene.</span>
+    <span class="c1">#</span>
+    <span class="c1"># Sharp-edge confirmation: the strip must have a clear brightness</span>
+    <span class="c1">#   boundary AND its mean brightness must be below dark_threshold/2</span>
+    <span class="c1">#   (for dark bars) or above light_threshold (for light bars).</span>
+    <span class="c1">#   Natural scene transitions (dark wall → bright window) have</span>
+    <span class="c1">#   moderate brightness (50–80) that real bars don&#39;t.</span>
+    <span class="c1">#</span>
+    <span class="c1"># Uniformity-contrast confirmation: the strip must be flat (low var),</span>
+    <span class="c1">#   have high contrast ratio vs adjacent content, AND have very low</span>
+    <span class="c1">#   brightness.</span>
+    <span class="n">confirmed_bars</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">bar_sides</span><span class="p">:</span>
+        <span class="n">has_edge</span> <span class="o">=</span> <span class="n">_has_sharp_edge</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">bh</span><span class="p">,</span> <span class="n">bw</span><span class="p">,</span> <span class="n">edge_brightness_threshold</span><span class="p">)</span>
+        <span class="n">has_contrast</span> <span class="o">=</span> <span class="n">_uniformity_contrast</span><span class="p">(</span>
+            <span class="n">img</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">uniformity_contrast_threshold</span><span class="p">)</span>
+
+        <span class="n">thin_px</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">h</span> <span class="k">if</span> <span class="n">s</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;top&#39;</span><span class="p">,</span> <span class="s1">&#39;bottom&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="n">w</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.01</span><span class="p">),</span> <span class="mi">3</span><span class="p">)</span>
+        <span class="n">thin_strip</span> <span class="o">=</span> <span class="n">_get_strip</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">thin_px</span><span class="p">,</span> <span class="n">thin_px</span><span class="p">)</span>
+        <span class="n">strip_brightness</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">thin_strip</span><span class="p">))</span>
+
+        <span class="n">is_bar_dark</span> <span class="o">=</span> <span class="n">strip_brightness</span> <span class="o">&lt;</span> <span class="p">(</span><span class="n">dark_threshold</span> <span class="o">*</span> <span class="mf">0.7</span><span class="p">)</span>
+        <span class="n">is_bar_light</span> <span class="o">=</span> <span class="n">strip_brightness</span> <span class="o">&gt;</span> <span class="n">light_threshold</span>
+
+        <span class="k">if</span> <span class="n">has_edge</span> <span class="ow">and</span> <span class="p">(</span><span class="n">is_bar_dark</span> <span class="ow">or</span> <span class="n">is_bar_light</span><span class="p">):</span>
+            <span class="n">confirmed</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">elif</span> <span class="n">has_contrast</span> <span class="ow">and</span> <span class="p">(</span><span class="n">is_bar_dark</span> <span class="ow">or</span> <span class="n">is_bar_light</span><span class="p">):</span>
+            <span class="n">confirmed</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">confirmed</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">confirmed</span><span class="p">:</span>
+            <span class="k">continue</span>
+
+        <span class="c1"># Extra guard for light bars: adjacent content must be darker</span>
+        <span class="k">if</span> <span class="n">side_info</span><span class="p">[</span><span class="n">s</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;is_light_bar&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="n">adj_bright</span> <span class="o">=</span> <span class="n">_adjacent_brightness</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">s</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">adj_bright</span> <span class="o">&gt;</span> <span class="n">light_bar_adjacent_max_brightness</span><span class="p">:</span>
+                <span class="k">continue</span>
+        <span class="n">confirmed_bars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+
+    <span class="n">bar_sides</span> <span class="o">=</span> <span class="n">confirmed_bars</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 4. Centre content check (for product-style detection)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="n">center_crop</span> <span class="o">=</span> <span class="n">img</span><span class="p">[</span><span class="n">h</span> <span class="o">//</span> <span class="mi">4</span><span class="p">:</span><span class="mi">3</span> <span class="o">*</span> <span class="n">h</span> <span class="o">//</span> <span class="mi">4</span><span class="p">,</span> <span class="n">w</span> <span class="o">//</span> <span class="mi">4</span><span class="p">:</span><span class="mi">3</span> <span class="o">*</span> <span class="n">w</span> <span class="o">//</span> <span class="mi">4</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="n">center_var</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">center_crop</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)))</span>
+    <span class="n">has_center_content</span> <span class="o">=</span> <span class="n">center_var</span> <span class="o">&gt;</span> <span class="n">center_variance_threshold</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 5. Decision logic</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Full uniform-colour frame (≥ 3 non-light-neutral sides)</span>
+    <span class="n">uniform_non_light</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">frame_sides</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">side_info</span><span class="p">[</span><span class="n">s</span><span class="p">][</span><span class="s1">&#39;is_light_neutral&#39;</span><span class="p">]</span>
+    <span class="p">]</span>
+    <span class="n">has_full_frame</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">uniform_non_light</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">3</span>
+
+    <span class="c1"># Artificial bar detected on at least one side</span>
+    <span class="n">has_bar</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">bar_sides</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+
+    <span class="c1"># Product-style image: all uniform sides are light-neutral + centre has</span>
+    <span class="c1"># real content  →  preserve</span>
+    <span class="n">all_uniform_light</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="nb">all</span><span class="p">(</span><span class="n">side_info</span><span class="p">[</span><span class="n">s</span><span class="p">][</span><span class="s1">&#39;is_light_neutral&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">frame_sides</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">frame_sides</span> <span class="k">else</span> <span class="kc">False</span>
+    <span class="p">)</span>
+    <span class="n">is_product_style</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">all_uniform_light</span> <span class="ow">and</span> <span class="n">has_center_content</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">frame_sides</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span>
+    <span class="p">)</span>
+
+    <span class="n">should_filter</span> <span class="o">=</span> <span class="p">(</span><span class="n">has_full_frame</span> <span class="ow">or</span> <span class="n">has_bar</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_product_style</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">should_filter</span> <span class="k">else</span> <span class="mi">0</span></div>
+
+
+
+<div class="viewcode-block" id="ImageBorderVarianceFilter">
+<a class="viewcode-back" href="../../../../api/data_juicer.ops.filter.image_border_variance_filter.html#data_juicer.ops.filter.ImageBorderVarianceFilter">[docs]</a>
+<span class="nd">@OPERATORS</span><span class="o">.</span><span class="n">register_module</span><span class="p">(</span><span class="s1">&#39;image_border_variance_filter&#39;</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ImageBorderVarianceFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Filter to detect and remove images with artificial borders or bars</span>
+<span class="sd">    while preserving product-style images with white/light backgrounds.</span>
+
+<span class="sd">    Registered as ``image_border_variance_filter``.</span>
+
+<span class="sd">    Unlike simple variance-based border checks, this filter:</span>
+
+<span class="sd">    - Checks each edge **independently** so partial bars (e.g. a single</span>
+<span class="sd">      watermark strip at the bottom) are caught.</span>
+<span class="sd">    - Uses **multi-scale scanning** to detect thin bars that are narrower</span>
+<span class="sd">      than the default border strip.</span>
+<span class="sd">    - **Confirms** candidate bars via sharp-edge detection or</span>
+<span class="sd">      uniformity-contrast analysis to avoid false positives on natural</span>
+<span class="sd">      dark/light scene content (e.g. night sky, overcast sky).</span>
+<span class="sd">    - Handles both **dark bars** (black letterboxing, dark watermark</span>
+<span class="sd">      strips) and **light bars** (white info strips, bright frames).</span>
+<span class="sd">    - Explicitly **preserves** product-style images that have uniform</span>
+<span class="sd">      white / off-white / light-grey backgrounds with content in the</span>
+<span class="sd">      centre (typical of e-commerce product photos, icons, logos).</span>
+
+<span class="sd">    Use cases:</span>
+<span class="sd">        - Filter stock-photo watermark bars (Alamy, Shutterstock, etc.)</span>
+<span class="sd">        - Filter letterboxed / pillarboxed video frames</span>
+<span class="sd">        - Filter images with decorative coloured frames</span>
+<span class="sd">        - Preserve product photos, icons, and logos on light backgrounds</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">_default_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;border_ratio&#39;</span><span class="p">:</span> <span class="mf">0.05</span><span class="p">,</span>
+        <span class="s1">&#39;variance_threshold&#39;</span><span class="p">:</span> <span class="mi">50</span><span class="p">,</span>
+        <span class="s1">&#39;uniformity_threshold&#39;</span><span class="p">:</span> <span class="mf">0.85</span><span class="p">,</span>
+        <span class="s1">&#39;light_bg_threshold&#39;</span><span class="p">:</span> <span class="mi">200</span><span class="p">,</span>
+        <span class="s1">&#39;neutral_max_spread&#39;</span><span class="p">:</span> <span class="mi">15</span><span class="p">,</span>
+        <span class="s1">&#39;dark_threshold&#39;</span><span class="p">:</span> <span class="mi">80</span><span class="p">,</span>
+        <span class="s1">&#39;light_threshold&#39;</span><span class="p">:</span> <span class="mi">220</span><span class="p">,</span>
+        <span class="s1">&#39;bar_ratio_threshold&#39;</span><span class="p">:</span> <span class="mf">0.90</span><span class="p">,</span>
+        <span class="s1">&#39;edge_brightness_threshold&#39;</span><span class="p">:</span> <span class="mi">30</span><span class="p">,</span>
+        <span class="s1">&#39;uniformity_contrast_threshold&#39;</span><span class="p">:</span> <span class="mf">3.0</span><span class="p">,</span>
+        <span class="s1">&#39;light_bar_adjacent_max_brightness&#39;</span><span class="p">:</span> <span class="mi">180</span><span class="p">,</span>
+        <span class="s1">&#39;center_variance_threshold&#39;</span><span class="p">:</span> <span class="mi">500</span><span class="p">,</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="ImageBorderVarianceFilter.__init__">
+<a class="viewcode-back" href="../../../../api/data_juicer.ops.filter.image_border_variance_filter.html#data_juicer.ops.filter.ImageBorderVarianceFilter.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                 <span class="n">border_ratio</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+                 <span class="n">variance_threshold</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+                 <span class="n">uniformity_threshold</span><span class="o">=</span><span class="mf">0.85</span><span class="p">,</span>
+                 <span class="n">light_bg_threshold</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>
+                 <span class="n">neutral_max_spread</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+                 <span class="n">dark_threshold</span><span class="o">=</span><span class="mi">80</span><span class="p">,</span>
+                 <span class="n">light_threshold</span><span class="o">=</span><span class="mi">220</span><span class="p">,</span>
+                 <span class="n">bar_ratio_threshold</span><span class="o">=</span><span class="mf">0.90</span><span class="p">,</span>
+                 <span class="n">edge_brightness_threshold</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+                 <span class="n">uniformity_contrast_threshold</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
+                 <span class="n">light_bar_adjacent_max_brightness</span><span class="o">=</span><span class="mi">180</span><span class="p">,</span>
+                 <span class="n">center_variance_threshold</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+                 <span class="n">any_or_all</span><span class="o">=</span><span class="s1">&#39;any&#39;</span><span class="p">,</span>
+                 <span class="o">*</span><span class="n">args</span><span class="p">,</span>
+                 <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialise the ImageBorderVarianceFilter.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            border_ratio (float): Fraction of width/height used as the</span>
+<span class="sd">                default border strip.  Default ``0.05`` (5 %).</span>
+<span class="sd">            variance_threshold (float): Max mean per-channel variance for</span>
+<span class="sd">                a border to be considered &quot;uniform&quot;.  Lower → stricter.</span>
+<span class="sd">                Default ``50``.</span>
+<span class="sd">            uniformity_threshold (float): Min fraction of border pixels</span>
+<span class="sd">                within 30 units of the mean colour.  Default ``0.85``.</span>
+<span class="sd">            light_bg_threshold (float): Min mean brightness (0–255) for a</span>
+<span class="sd">                border to qualify as a &quot;light background&quot;.  Default ``200``.</span>
+<span class="sd">            neutral_max_spread (float): Max R/G/B spread to count as a</span>
+<span class="sd">                neutral (grey / white) colour.  Default ``15``.</span>
+<span class="sd">            dark_threshold (float): Max mean brightness for a pixel to be</span>
+<span class="sd">                counted as &quot;dark&quot;.  Default ``80``.</span>
+<span class="sd">            light_threshold (float): Min mean brightness for a pixel to be</span>
+<span class="sd">                counted as &quot;light&quot;.  Default ``220``.</span>
+<span class="sd">            bar_ratio_threshold (float): Min fraction of dark/light pixels</span>
+<span class="sd">                in a strip to flag it as a bar.  Default ``0.90``.</span>
+<span class="sd">            edge_brightness_threshold (float): Min row-to-row brightness</span>
+<span class="sd">                jump to confirm a sharp edge.  Default ``30``.</span>
+<span class="sd">            uniformity_contrast_threshold (float): Min ratio of adjacent</span>
+<span class="sd">                variance to bar variance to confirm via uniformity</span>
+<span class="sd">                contrast.  Default ``3.0``.</span>
+<span class="sd">            light_bar_adjacent_max_brightness (float): Max adjacent content</span>
+<span class="sd">                brightness for a light bar to be confirmed (avoids</span>
+<span class="sd">                product-bg false positives).  Default ``180``.</span>
+<span class="sd">            center_variance_threshold (float): Min centre-crop variance to</span>
+<span class="sd">                consider the image as having real content.  Default ``500``.</span>
+<span class="sd">            any_or_all (str): Strategy for multi-image samples.</span>
+<span class="sd">                ``&#39;any&#39;``: keep if *any* image passes.</span>
+<span class="sd">                ``&#39;all&#39;``: keep only if *all* images pass.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">any_or_all</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;any&#39;</span><span class="p">,</span> <span class="s1">&#39;all&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;any_or_all must be &#39;any&#39; or &#39;all&#39;&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">any</span> <span class="o">=</span> <span class="p">(</span><span class="n">any_or_all</span> <span class="o">==</span> <span class="s1">&#39;any&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">border_ratio</span> <span class="o">=</span> <span class="n">border_ratio</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">variance_threshold</span> <span class="o">=</span> <span class="n">variance_threshold</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uniformity_threshold</span> <span class="o">=</span> <span class="n">uniformity_threshold</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">light_bg_threshold</span> <span class="o">=</span> <span class="n">light_bg_threshold</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">neutral_max_spread</span> <span class="o">=</span> <span class="n">neutral_max_spread</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dark_threshold</span> <span class="o">=</span> <span class="n">dark_threshold</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">light_threshold</span> <span class="o">=</span> <span class="n">light_threshold</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bar_ratio_threshold</span> <span class="o">=</span> <span class="n">bar_ratio_threshold</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">edge_brightness_threshold</span> <span class="o">=</span> <span class="n">edge_brightness_threshold</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uniformity_contrast_threshold</span> <span class="o">=</span> <span class="n">uniformity_contrast_threshold</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">light_bar_adjacent_max_brightness</span> <span class="o">=</span> \
+            <span class="n">light_bar_adjacent_max_brightness</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">center_variance_threshold</span> <span class="o">=</span> <span class="n">center_variance_threshold</span></div>
+
+
+<div class="viewcode-block" id="ImageBorderVarianceFilter.compute_stats_single">
+<a class="viewcode-back" href="../../../../api/data_juicer.ops.filter.image_border_variance_filter.html#data_juicer.ops.filter.ImageBorderVarianceFilter.compute_stats_single">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_stats_single</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sample</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="c1"># Skip if already computed</span>
+        <span class="k">if</span> <span class="n">StatsKeys</span><span class="o">.</span><span class="n">image_border_variance_scores</span> <span class="ow">in</span> <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">stats</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="n">sample</span>
+
+        <span class="c1"># Handle missing or empty image key</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sample</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">sample</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">image_key</span><span class="p">]:</span>
+            <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">stats</span><span class="p">][</span>
+                <span class="n">StatsKeys</span><span class="o">.</span><span class="n">image_border_variance_scores</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">return</span> <span class="n">sample</span>
+
+        <span class="c1"># Load images</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="n">sample</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">image_key</span><span class="p">]</span>
+        <span class="n">sample</span><span class="p">,</span> <span class="n">images</span> <span class="o">=</span> <span class="n">load_data_with_context</span><span class="p">(</span>
+            <span class="n">sample</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">keys</span><span class="p">,</span> <span class="n">load_image</span><span class="p">,</span>
+            <span class="n">mm_bytes_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">image_bytes_key</span><span class="p">)</span>
+
+        <span class="c1"># Score each image: 1 = has artificial border, 0 = clean / product</span>
+        <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">stats</span><span class="p">][</span>
+            <span class="n">StatsKeys</span><span class="o">.</span><span class="n">image_border_variance_scores</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">calc_border_score</span><span class="p">(</span>
+                <span class="n">images</span><span class="p">[</span><span class="n">k</span><span class="p">],</span>
+                <span class="n">border_ratio</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">border_ratio</span><span class="p">,</span>
+                <span class="n">variance_threshold</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">variance_threshold</span><span class="p">,</span>
+                <span class="n">uniformity_threshold</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">uniformity_threshold</span><span class="p">,</span>
+                <span class="n">light_bg_threshold</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">light_bg_threshold</span><span class="p">,</span>
+                <span class="n">neutral_max_spread</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">neutral_max_spread</span><span class="p">,</span>
+                <span class="n">dark_threshold</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dark_threshold</span><span class="p">,</span>
+                <span class="n">light_threshold</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">light_threshold</span><span class="p">,</span>
+                <span class="n">bar_ratio_threshold</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bar_ratio_threshold</span><span class="p">,</span>
+                <span class="n">edge_brightness_threshold</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">edge_brightness_threshold</span><span class="p">,</span>
+                <span class="n">uniformity_contrast_threshold</span><span class="o">=</span><span class="bp">self</span>
+                    <span class="o">.</span><span class="n">uniformity_contrast_threshold</span><span class="p">,</span>
+                <span class="n">light_bar_adjacent_max_brightness</span><span class="o">=</span><span class="bp">self</span>
+                    <span class="o">.</span><span class="n">light_bar_adjacent_max_brightness</span><span class="p">,</span>
+                <span class="n">center_variance_threshold</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">center_variance_threshold</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="n">sample</span></div>
+
+
+<div class="viewcode-block" id="ImageBorderVarianceFilter.process_single">
+<a class="viewcode-back" href="../../../../api/data_juicer.ops.filter.image_border_variance_filter.html#data_juicer.ops.filter.ImageBorderVarianceFilter.process_single">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_single</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sample</span><span class="p">):</span>
+        <span class="n">scores</span> <span class="o">=</span> <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">stats</span><span class="p">][</span>
+            <span class="n">StatsKeys</span><span class="o">.</span><span class="n">image_border_variance_scores</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">scores</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+
+        <span class="c1"># 0 = clean (keep), 1 = has border (filter out)</span>
+        <span class="n">keep</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">v</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">scores</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">keep</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">any</span> <span class="k">else</span> <span class="n">keep</span><span class="o">.</span><span class="n">all</span><span class="p">()</span></div>
+</div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2024, Data-Juicer Team.
+      <br/>
+    
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.0.4.
+    <br/>
+  </p>
+</div>
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

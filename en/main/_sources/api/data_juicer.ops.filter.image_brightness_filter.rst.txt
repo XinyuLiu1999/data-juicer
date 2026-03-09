@@ -1,0 +1,7 @@
+data\_juicer.ops.filter.image\_brightness\_filter module
+========================================================
+
+.. automodule:: data_juicer.ops.filter.image_brightness_filter
+   :members:
+   :show-inheritance:
+   :undoc-members:

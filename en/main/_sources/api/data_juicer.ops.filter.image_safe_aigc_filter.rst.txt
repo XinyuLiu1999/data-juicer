@@ -1,0 +1,7 @@
+data\_juicer.ops.filter.image\_safe\_aigc\_filter module
+========================================================
+
+.. automodule:: data_juicer.ops.filter.image_safe_aigc_filter
+   :members:
+   :show-inheritance:
+   :undoc-members:
