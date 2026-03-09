@@ -31,6 +31,7 @@ class ImageTextMatchingFilter(Filter):
     keeps the sample only if all images meet the condition."""
 
     _accelerator = "cuda"
+    _batched_op = True
 
     def __init__(
         self,

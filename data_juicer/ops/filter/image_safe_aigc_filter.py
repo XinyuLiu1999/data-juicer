@@ -33,6 +33,7 @@ class ImageSafeAigcFilter(Filter):
     """
 
     _accelerator = "cuda"
+    _batched_op = True
 
     def __init__(
         self,

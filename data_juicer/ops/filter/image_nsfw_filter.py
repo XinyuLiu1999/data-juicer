@@ -25,6 +25,7 @@ class ImageNSFWFilter(Filter):
     scores are cached in the 'image_nsfw_score' field of the sample's stats."""
 
     _accelerator = "cuda"
+    _batched_op = True
 
     def __init__(
         self,

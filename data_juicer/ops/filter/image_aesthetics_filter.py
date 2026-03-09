@@ -28,6 +28,7 @@ class ImageAestheticsFilter(Filter):
     'shunk031/aesthetics-predictor'."""
 
     _accelerator = "cuda"
+    _batched_op = True
 
     def __init__(
         self,

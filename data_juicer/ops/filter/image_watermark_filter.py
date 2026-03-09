@@ -29,6 +29,7 @@ class ImageWatermarkFilter(Filter):
     in the sample, the metric is set to an empty array."""
 
     _accelerator = "cuda"
+    _batched_op = True
 
     def __init__(
         self,
