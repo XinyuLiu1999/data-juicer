@@ -180,8 +180,13 @@ class RayExecutor(ExecutorBase, DAGExecutionMixin, EventLoggingMixin):
             logger.info("Processing data with DAG monitoring...")
             tstart = time.time()
 
-            # Get input row count before processing
-            input_rows = dataset.data.count()
+            # Skip early row counting to avoid premature materialization.
+            # For large datasets (e.g. 6.3T), .count() forces Ray to
+            # execute and materialize the entire preprocessing pipeline
+            # before any filters run, requiring massive intermediate
+            # storage. By deferring, preprocess and filter ops are fused
+            # into a single streaming pass.
+            input_rows = None
             start_time = time.time()
 
             # Pre-execute DAG monitoring (log operation start events)
