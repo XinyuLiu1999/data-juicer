@@ -792,23 +792,11 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auto_proc</span><span class="p">:</span>
             <span class="n">calculate_ray_np</span><span class="p">(</span><span class="n">operators</span><span class="p">)</span>
 
-        <span class="c1"># Check if dataset is empty - Ray returns None for columns() on empty datasets</span>
-        <span class="c1"># with unknown schema. If empty, skip processing as there&#39;s nothing to process.</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">row_count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
-        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-            <span class="n">row_count</span> <span class="o">=</span> <span class="mi">0</span>
-
-        <span class="k">if</span> <span class="n">row_count</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">loguru</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span>
-
-            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Dataset is empty (0 rows), skipping operator processing&quot;</span><span class="p">)</span>
-            <span class="k">return</span> <span class="bp">self</span>
-
-        <span class="c1"># Cache columns once at start to avoid breaking pipeline with repeated columns() calls</span>
-        <span class="c1"># Ray&#39;s columns() internally does limit(1) which forces execution and breaks streaming</span>
+        <span class="c1"># Use schema_hint or take() to check emptiness and get columns</span>
+        <span class="c1"># without forcing full materialization. columns() uses limit(1)</span>
+        <span class="c1"># which is acceptable (only reads one batch), but .count() would</span>
+        <span class="c1"># materialize the entire dataset and must be avoided.</span>
         <span class="n">columns_result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">()</span>
-        <span class="c1"># Handle empty dataset case where columns() returns None</span>
         <span class="k">if</span> <span class="n">columns_result</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">loguru</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span>
 

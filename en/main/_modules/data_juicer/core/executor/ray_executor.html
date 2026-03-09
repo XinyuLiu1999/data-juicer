@@ -671,7 +671,10 @@
         <span class="c1"># 1. load data</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Loading dataset with Ray...&quot;</span><span class="p">)</span>
         <span class="n">dataset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">datasetbuilder</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="n">num_proc</span><span class="o">=</span><span class="n">load_data_np</span><span class="p">)</span>
-        <span class="n">columns</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">()</span>
+        <span class="c1"># Defer columns() call to after materialization to avoid triggering</span>
+        <span class="c1"># a limit(1) execution that forces the entire preprocessing pipeline</span>
+        <span class="c1"># to run prematurely (reading all parquet files just to get schema).</span>
+        <span class="n">columns</span> <span class="o">=</span> <span class="kc">None</span>
 
         <span class="c1"># 2. extract processes</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Preparing process operators...&quot;</span><span class="p">)</span>
