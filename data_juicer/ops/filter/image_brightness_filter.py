@@ -29,6 +29,8 @@ def calc_brightness_stats(image):
 
 @OPERATORS.register_module("image_brightness_filter")
 class ImageBrightnessFilter(Filter):
+    _batched_op = True
+
     def __init__(self, min_brightness=None, max_brightness=None, any_or_all="any", *args, **kwargs):
         super().__init__(*args, **kwargs)
         if any_or_all not in ["any", "all"]:

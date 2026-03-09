@@ -11,6 +11,8 @@ def calc_entropy(image):
 
 @OPERATORS.register_module("image_entropy_filter")
 class ImageEntropyFilter(Filter):
+    _batched_op = True
+
     def __init__(self, min_entropy=None, max_entropy=None, any_or_all="any", *args, **kwargs):
         super().__init__(*args, **kwargs)
         if any_or_all not in ["any", "all"]:

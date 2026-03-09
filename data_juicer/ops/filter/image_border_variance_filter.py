@@ -361,6 +361,8 @@ class ImageBorderVarianceFilter(Filter):
         - Preserve product photos, icons, and logos on light backgrounds
     """
 
+    _batched_op = True
+
     _default_kwargs = {
         'border_ratio': 0.05,
         'variance_threshold': 50,

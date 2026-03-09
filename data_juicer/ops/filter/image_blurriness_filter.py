@@ -23,6 +23,8 @@ def calc_blurriness(image):
 
 @OPERATORS.register_module("image_blurriness_filter")
 class ImageBlurrinessFilter(Filter):
+    _batched_op = True
+
     def __init__(self, min_blurriness=None, max_blurriness=None, any_or_all="any", *args, **kwargs):
         super().__init__(*args, **kwargs)
         if any_or_all not in ["any", "all"]:
