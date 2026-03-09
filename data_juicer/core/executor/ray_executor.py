@@ -144,7 +144,10 @@ class RayExecutor(ExecutorBase, DAGExecutionMixin, EventLoggingMixin):
         # 1. load data
         logger.info("Loading dataset with Ray...")
         dataset = self.datasetbuilder.load_dataset(num_proc=load_data_np)
-        columns = dataset.data.columns()
+        # Defer columns() call to after materialization to avoid triggering
+        # a limit(1) execution that forces the entire preprocessing pipeline
+        # to run prematurely (reading all parquet files just to get schema).
+        columns = None
 
         # 2. extract processes
         logger.info("Preparing process operators...")

@@ -244,23 +244,11 @@ class RayDataset(DJDataset):
         if self._auto_proc:
             calculate_ray_np(operators)
 
-        # Check if dataset is empty - Ray returns None for columns() on empty datasets
-        # with unknown schema. If empty, skip processing as there's nothing to process.
-        try:
-            row_count = self.data.count()
-        except Exception:
-            row_count = 0
-
-        if row_count == 0:
-            from loguru import logger
-
-            logger.warning("Dataset is empty (0 rows), skipping operator processing")
-            return self
-
-        # Cache columns once at start to avoid breaking pipeline with repeated columns() calls
-        # Ray's columns() internally does limit(1) which forces execution and breaks streaming
+        # Use schema_hint or take() to check emptiness and get columns
+        # without forcing full materialization. columns() uses limit(1)
+        # which is acceptable (only reads one batch), but .count() would
+        # materialize the entire dataset and must be avoided.
         columns_result = self.data.columns()
-        # Handle empty dataset case where columns() returns None
         if columns_result is None:
             from loguru import logger
 
