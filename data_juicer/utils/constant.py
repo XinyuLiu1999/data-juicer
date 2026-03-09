@@ -68,12 +68,15 @@ class MetaKeys(object):
     video_object_segment_tags = "video_object_segment_tags"
     # # depth info in video
     video_depth_tags = "video_depth_tags"
+    # # video optical flow
+    video_optical_flow = "video_optical_flow"
     # # info extracted by VGGT
     vggt_tags = "vggt_tags"
     # # image tags
     image_tags = "image_tags"
     # # hand reconstruction
     hand_reconstruction_tags = "hand_reconstruction_tags"
+    hand_reconstruction_hawor_tags = "hand_reconstruction_hawor_tags"
     # # bounding box tag
     bbox_tag = DEFAULT_PREFIX + "bbox__"
     # # class label (from detection) tag
@@ -86,6 +89,14 @@ class MetaKeys(object):
     # # OCR results
     image_ocr_tag = "image_ocr_tag"
     image_ocr_difficulty = "image_ocr_difficulty"
+    # # Static Camera Calibration Info (for DeepCalib)
+    static_camera_calibration_deepcalib_tags = "static_camera_calibration_deepcalib_tags"
+    # # Static Camera Calibration Info (for Moge-2)
+    static_camera_calibration_moge_tags = "static_camera_calibration_moge_tags"
+    # # Video Undistortion Info
+    video_undistortion_tags = "video_undistortion_tags"
+    # # Camera Pose Info
+    video_camera_pose_tags = "video_camera_pose_tags"
 
     # === info extraction related tags ===
     # # for event extraction
