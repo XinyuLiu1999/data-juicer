@@ -236,6 +236,10 @@ class DefaultExecutor(ExecutorBase, DAGExecutionMixin, EventLoggingMixin):
         tend = time()
         logger.info(f"All OPs are done in {tend - tstart:.3f}s.")
 
+        # Flush any buffered tracer entries (e.g. parquet format)
+        if self.open_tracer:
+            self.tracer.finalize_traces()
+
         # 4. data export
         if not skip_export:
             logger.info("Exporting dataset to disk...")

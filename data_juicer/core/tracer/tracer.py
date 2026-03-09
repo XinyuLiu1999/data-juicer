@@ -62,6 +62,36 @@ class Tracer:
         # Counter for each op to track how many samples have been collected
         self._collected_counts = defaultdict(int)
 
+    @staticmethod
+    def _strip_binary_columns(entry):
+        """Strip binary columns from an entry for JSON-safe serialization."""
+        cleaned = {}
+        for k, v in entry.items():
+            if isinstance(v, bytes):
+                cleaned[k] = f"<binary {len(v)} bytes>"
+            elif isinstance(v, list) and v and isinstance(v[0], bytes):
+                cleaned[k] = [f"<binary {len(b)} bytes>" for b in v]
+            else:
+                cleaned[k] = v
+        return cleaned
+
+    def _append_trace_entry(self, op_name, entry):
+        """Append a single trace entry to the trace file, respecting trace_format."""
+        path = self.get_trace_file_path(op_name)
+        if self.trace_format == 'parquet':
+            # Accumulate entries in memory; flush in finalize or at show_num
+            self._sample_traces[op_name].append(entry)
+            if len(self._sample_traces[op_name]) >= self.show_num:
+                df = pd.DataFrame(self._sample_traces[op_name])
+                df.to_parquet(path, index=False)
+        else:
+            cleaned = self._strip_binary_columns(entry)
+            with open(path, "a") as f:
+                entry_str = pd.DataFrame([cleaned]).to_json(
+                    orient="records", lines=True, force_ascii=False)
+                f.write(entry_str)
+                f.flush()
+
     def _export_df(self, df, base_name):
         """Export a DataFrame to the trace directory in the configured format."""
         if self.trace_format == 'parquet':
@@ -69,6 +99,18 @@ class Tracer:
             df.to_parquet(os.path.join(self.work_dir, res_name), index=False)
         else:
             res_name = f"{base_name}.jsonl"
+            # Strip binary columns for JSON-safe serialization
+            binary_cols = [c for c in df.columns
+                          if df[c].apply(lambda x: isinstance(x, bytes)
+                                         or (isinstance(x, list) and x
+                                             and isinstance(x[0], bytes))).any()]
+            if binary_cols:
+                df = df.copy()
+                for col in binary_cols:
+                    df[col] = df[col].apply(
+                        lambda v: f"<binary {len(v)} bytes>" if isinstance(v, bytes)
+                        else [f"<binary {len(b)} bytes>" for b in v] if isinstance(v, list) and v and isinstance(v[0], bytes)
+                        else v)
             df.to_json(os.path.join(self.work_dir, res_name), orient="records", lines=True, force_ascii=False)
 
     def should_trace_op(self, op_name: str) -> bool:
@@ -127,10 +169,7 @@ class Tracer:
             logger.debug(f"Trace the entry in mapper [{op_name}]: {entry}")
 
             self._collected_counts[op_name] += 1
-            with open(self.get_trace_file_path(op_name), "a") as f:
-                entry_str = pd.DataFrame([entry]).to_json(orient="records", lines=True, force_ascii=False)
-                f.write(entry_str)
-                f.flush()
+            self._append_trace_entry(op_name, entry)
 
             return True
 
@@ -160,12 +199,24 @@ class Tracer:
             logger.debug(f"Trace the sample in filter [{op_name}]: {sample}")
 
             self._collected_counts[op_name] += 1
-            with open(self.get_trace_file_path(op_name), "a") as f:
-                entry_str = pd.DataFrame([sample]).to_json(orient="records", lines=True, force_ascii=False)
-                f.write(entry_str)
-                f.flush()
+            self._append_trace_entry(op_name, sample)
 
             return True
+
+    def finalize_traces(self):
+        """
+        Flush any buffered parquet trace entries to disk.
+        Called after all operators have finished processing.
+        """
+        if self.trace_format != 'parquet':
+            return
+        for op_name, traces in self._sample_traces.items():
+            if not traces:
+                continue
+            path = self.get_trace_file_path(op_name)
+            df = pd.DataFrame(traces)
+            df.to_parquet(path, index=False)
+        self._sample_traces.clear()
 
     def get_trace_file_path(self, op_name: str) -> str:
         """
@@ -174,7 +225,8 @@ class Tracer:
         :param op_name: the operator name
         :return: the file path
         """
-        return os.path.join(self.work_dir, f"sample_trace-{op_name}.jsonl")
+        ext = 'parquet' if self.trace_format == 'parquet' else 'jsonl'
+        return os.path.join(self.work_dir, f"sample_trace-{op_name}.{ext}")
 
     @deprecated("This method will be deprecated in the future. Please apply the sample-level tracing method instead.")
     def trace_mapper(self, op_name: str, previous_ds: Dataset, processed_ds: Dataset, text_key: str):
