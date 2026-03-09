@@ -4,6 +4,7 @@ from PIL import ImageFilter, ImageStat
 from data_juicer.utils.constant import Fields, StatsKeys
 from data_juicer.utils.mm_utils import load_data_with_context, load_image
 from ..base_op import OPERATORS, Filter
+from ..op_fusion import LOADED_IMAGES
 
 MAX_RESOLUTION_FOR_BLURRY_DETECTION = 512
 
@@ -22,6 +23,7 @@ def calc_blurriness(image):
 
 
 @OPERATORS.register_module("image_blurriness_filter")
+@LOADED_IMAGES.register_module("image_blurriness_filter")
 class ImageBlurrinessFilter(Filter):
     _batched_op = True
 

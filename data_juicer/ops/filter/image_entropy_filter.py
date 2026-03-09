@@ -3,6 +3,7 @@ import numpy as np
 from data_juicer.utils.constant import Fields, StatsKeys
 from data_juicer.utils.mm_utils import load_data_with_context, load_image
 from ..base_op import OPERATORS, Filter
+from ..op_fusion import LOADED_IMAGES
 
 
 def calc_entropy(image):
@@ -10,6 +11,7 @@ def calc_entropy(image):
 
 
 @OPERATORS.register_module("image_entropy_filter")
+@LOADED_IMAGES.register_module("image_entropy_filter")
 class ImageEntropyFilter(Filter):
     _batched_op = True
 

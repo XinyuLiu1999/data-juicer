@@ -4,6 +4,7 @@ from data_juicer.utils.constant import Fields, StatsKeys
 from data_juicer.utils.mm_utils import load_data_with_context, load_image
 
 from ..base_op import OPERATORS, Filter
+from ..op_fusion import LOADED_IMAGES
 
 SIDE_NAMES = ('top', 'bottom', 'left', 'right')
 
@@ -333,6 +334,7 @@ def calc_border_score(image,
 
 
 @OPERATORS.register_module('image_border_variance_filter')
+@LOADED_IMAGES.register_module('image_border_variance_filter')
 class ImageBorderVarianceFilter(Filter):
     """Filter to detect and remove images with artificial borders or bars
     while preserving product-style images with white/light backgrounds.
