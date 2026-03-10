@@ -150,15 +150,19 @@ def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg) -> ray.data
         dataset = set_dataset_to_absolute_path(dataset, dataset_path, cfg)
 
     if cfg and getattr(cfg, "laioncoco_preprocessing", False):
-        from data_juicer.utils.mm_utils import SpecialTokens
+        # Skip if preprocessing was already applied (clean_content removed)
+        if "clean_content" in dataset.columns():
+            from data_juicer.utils.mm_utils import SpecialTokens
 
-        logger.info("Applying LAION-COCO preprocessing for Ray dataset...")
-        dataset = dataset.map_batches(
-            partial(preprocess_laioncoco_ray,
-                    image_special_token=SpecialTokens.image),
-            batch_format="pyarrow",
-            batch_size=DEFAULT_BATCH_SIZE,
-        )
+            logger.info("Applying LAION-COCO preprocessing for Ray dataset...")
+            dataset = dataset.map_batches(
+                partial(preprocess_laioncoco_ray,
+                        image_special_token=SpecialTokens.image),
+                batch_format="pyarrow",
+                batch_size=DEFAULT_BATCH_SIZE,
+            )
+        else:
+            logger.info("LAION-COCO preprocessing already applied, skipping.")
 
     return dataset
 
