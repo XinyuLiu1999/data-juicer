@@ -11,13 +11,11 @@ from data_juicer.utils.mm_utils import (
 from data_juicer.utils.model_utils import get_model, prepare_model
 
 from ..base_op import OPERATORS, Filter
-from ..op_fusion import LOADED_IMAGES
 
 OP_NAME = "image_text_similarity_filter"
 
 
 @OPERATORS.register_module(OP_NAME)
-@LOADED_IMAGES.register_module(OP_NAME)
 class ImageTextSimilarityFilter(Filter):
     """Filter to keep samples with image-text similarity within a specified range.
 

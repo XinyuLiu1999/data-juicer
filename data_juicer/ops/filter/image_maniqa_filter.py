@@ -9,7 +9,6 @@ from data_juicer.utils.mm_utils import load_data_with_context, load_image
 
 from ...utils.model_utils import get_model, prepare_model
 from ..base_op import OPERATORS, Filter
-from ..op_fusion import LOADED_IMAGES
 
 torch = LazyLoader("torch")
 TF = LazyLoader("torchvision.transforms.functional")
@@ -18,7 +17,6 @@ OP_NAME = "image_maniqa_filter"
 
 
 @OPERATORS.register_module(OP_NAME)
-@LOADED_IMAGES.register_module(OP_NAME)
 class ImageManiqaFilter(Filter):
     """Filter to keep samples with MANIQA image quality scores within a
     specific range.

@@ -2,7 +2,6 @@ import numpy as np
 from jsonargparse.typing import ClosedUnitInterval
 
 from data_juicer.ops.base_op import OPERATORS, Filter
-from data_juicer.ops.op_fusion import LOADED_IMAGES
 from data_juicer.utils.constant import Fields, StatsKeys
 from data_juicer.utils.lazy_loader import LazyLoader
 from data_juicer.utils.mm_utils import load_data_with_context, load_image
@@ -14,7 +13,6 @@ OP_NAME = "image_pair_similarity_filter"
 
 
 @OPERATORS.register_module(OP_NAME)
-@LOADED_IMAGES.register_module(OP_NAME)
 class ImagePairSimilarityFilter(Filter):
     """Filter to keep image pairs with similarities between images within a specific range.
 

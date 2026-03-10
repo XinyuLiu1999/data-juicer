@@ -7,7 +7,6 @@ from data_juicer.utils.mm_utils import load_data_with_context, load_image
 
 from ...utils.model_utils import get_model, prepare_model
 from ..base_op import OPERATORS, Filter
-from ..op_fusion import LOADED_IMAGES
 
 torch = LazyLoader("torch")
 
@@ -15,7 +14,6 @@ OP_NAME = "image_aesthetics_filter"
 
 
 @OPERATORS.register_module(OP_NAME)
-@LOADED_IMAGES.register_module(OP_NAME)
 class ImageAestheticsFilter(Filter):
     """Filter to keep samples with aesthetics scores within a specific range.
 

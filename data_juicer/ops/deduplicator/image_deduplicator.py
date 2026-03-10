@@ -8,7 +8,6 @@ from data_juicer.utils.lazy_loader import LazyLoader
 from data_juicer.utils.mm_utils import load_data_with_context, load_image
 
 from ..base_op import OPERATORS, Deduplicator
-from ..op_fusion import LOADED_IMAGES
 from .document_deduplicator import DocumentDeduplicator
 
 imgdedup_methods = LazyLoader("imagededup.methods")
@@ -30,7 +29,6 @@ def get_hash_method(method_name):
 
 
 @OPERATORS.register_module(OP_NAME)
-@LOADED_IMAGES.register_module(OP_NAME)
 class ImageDeduplicator(Deduplicator):
     """Deduplicates samples at the document level by exact matching of images.
 

@@ -6,7 +6,6 @@ from data_juicer.utils.mm_utils import load_data_with_context, load_image
 from data_juicer.utils.model_utils import get_model, prepare_model
 
 from ..base_op import OPERATORS, Filter
-from ..op_fusion import LOADED_IMAGES
 
 torch = LazyLoader("torch")
 
@@ -14,7 +13,6 @@ OP_NAME = "image_safe_aigc_filter"
 
 
 @OPERATORS.register_module(OP_NAME)
-@LOADED_IMAGES.register_module(OP_NAME)
 class ImageSafeAigcFilter(Filter):
     """Filter to keep samples whose images are detected as real (non-AIGC)
     images using the SAFE model.

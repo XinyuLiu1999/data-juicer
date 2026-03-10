@@ -11,13 +11,11 @@ from data_juicer.utils.mm_utils import (
 from data_juicer.utils.model_utils import get_model, prepare_model
 
 from ..base_op import OPERATORS, Filter
-from ..op_fusion import LOADED_IMAGES
 
 OP_NAME = "image_text_matching_filter"
 
 
 @OPERATORS.register_module(OP_NAME)
-@LOADED_IMAGES.register_module(OP_NAME)
 class ImageTextMatchingFilter(Filter):
     """Filter to keep samples with image-text matching scores within a specific range.
 

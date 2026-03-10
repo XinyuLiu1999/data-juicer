@@ -16,7 +16,6 @@ from data_juicer.utils.mm_utils import (
 from data_juicer.utils.model_utils import get_model, prepare_model
 
 from ..base_op import OPERATORS, Filter
-from ..op_fusion import LOADED_IMAGES
 
 torch = LazyLoader("torch")
 nltk = LazyLoader("nltk")
@@ -93,7 +92,6 @@ def run_ner(caption, pos_tagger=None):
 
 
 @OPERATORS.register_module(OP_NAME)
-@LOADED_IMAGES.register_module(OP_NAME)
 class PhraseGroundingRecallFilter(Filter):
     """Filter to keep samples based on the phrase grounding recall of phrases extracted from
     text in images.

@@ -4,7 +4,6 @@ from data_juicer.utils.lazy_loader import LazyLoader
 from data_juicer.utils.mm_utils import load_data_with_context, load_image
 
 from ..base_op import OPERATORS
-from ..op_fusion import LOADED_IMAGES
 from .ray_basic_deduplicator import RayBasicDeduplicator
 
 imgdedup_methods = LazyLoader("imagededup.methods")
@@ -26,7 +25,6 @@ def get_hash_method(method_name):
 
 
 @OPERATORS.register_module(OP_NAME)
-@LOADED_IMAGES.register_module(OP_NAME)
 class RayImageDeduplicator(RayBasicDeduplicator):
     """Deduplicates samples at the document level using exact matching of images in Ray distributed mode.
 
