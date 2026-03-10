@@ -678,15 +678,19 @@
         <span class="n">dataset</span> <span class="o">=</span> <span class="n">set_dataset_to_absolute_path</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">dataset_path</span><span class="p">,</span> <span class="n">cfg</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">cfg</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;laioncoco_preprocessing&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.mm_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpecialTokens</span>
+        <span class="c1"># Skip if preprocessing was already applied (clean_content removed)</span>
+        <span class="k">if</span> <span class="s2">&quot;clean_content&quot;</span> <span class="ow">in</span> <span class="n">dataset</span><span class="o">.</span><span class="n">columns</span><span class="p">():</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.mm_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpecialTokens</span>
 
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Applying LAION-COCO preprocessing for Ray dataset...&quot;</span><span class="p">)</span>
-        <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">map_batches</span><span class="p">(</span>
-            <span class="n">partial</span><span class="p">(</span><span class="n">preprocess_laioncoco_ray</span><span class="p">,</span>
-                    <span class="n">image_special_token</span><span class="o">=</span><span class="n">SpecialTokens</span><span class="o">.</span><span class="n">image</span><span class="p">),</span>
-            <span class="n">batch_format</span><span class="o">=</span><span class="s2">&quot;pyarrow&quot;</span><span class="p">,</span>
-            <span class="n">batch_size</span><span class="o">=</span><span class="n">DEFAULT_BATCH_SIZE</span><span class="p">,</span>
-        <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Applying LAION-COCO preprocessing for Ray dataset...&quot;</span><span class="p">)</span>
+            <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">map_batches</span><span class="p">(</span>
+                <span class="n">partial</span><span class="p">(</span><span class="n">preprocess_laioncoco_ray</span><span class="p">,</span>
+                        <span class="n">image_special_token</span><span class="o">=</span><span class="n">SpecialTokens</span><span class="o">.</span><span class="n">image</span><span class="p">),</span>
+                <span class="n">batch_format</span><span class="o">=</span><span class="s2">&quot;pyarrow&quot;</span><span class="p">,</span>
+                <span class="n">batch_size</span><span class="o">=</span><span class="n">DEFAULT_BATCH_SIZE</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;LAION-COCO preprocessing already applied, skipping.&quot;</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">dataset</span></div>
 
