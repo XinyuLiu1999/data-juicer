@@ -89,60 +89,100 @@ def preprocess_laioncoco_ray(table: pyarrow.Table, image_special_token: str) -> 
       with image special tokens
     - Flattens 'image_buffer_list' structs into 'images' (IDs) and
       'image_bytes' (raw bytes) columns
+
+    Uses native PyArrow operations to avoid copying image bytes through
+    Python, which is the main performance bottleneck for large tables.
     """
     import json
 
-    samples = table.to_pydict()
-    num_rows = len(samples.get("clean_content", []))
-    images_col = []
-    image_bytes_col = []
-    text_col = []
+    import pyarrow.compute as pc
 
+    num_rows = table.num_rows
+
+    # --- Extract image_ids and image_bytes via PyArrow struct access ---
+    if "image_buffer_list" in table.column_names:
+        buf_chunked = table.column("image_buffer_list")
+        # Combine chunks into a single array so we can access offsets/flatten
+        buf_col = buf_chunked.combine_chunks()
+        # buf_col is list<struct<image_id: string, buffer: binary>>
+        # Nulls are handled naturally: null list entries produce zero-length
+        # offset spans, resulting in empty lists in the output.
+        # Flatten to access struct fields, then re-nest using offsets
+        offsets = buf_col.offsets
+        flattened = buf_col.flatten()  # struct array
+
+        if len(flattened) > 0 and flattened.type.num_fields > 0:
+            # Extract struct fields by name
+            field_names = [flattened.type.field(i).name
+                           for i in range(flattened.type.num_fields)]
+            if "image_id" in field_names:
+                flat_ids = flattened.field("image_id")
+            else:
+                flat_ids = pyarrow.nulls(len(flattened), type=pyarrow.string())
+            if "buffer" in field_names:
+                flat_bytes = flattened.field("buffer")
+            else:
+                flat_bytes = pyarrow.nulls(len(flattened),
+                                           type=pyarrow.binary())
+
+            # Re-nest into list arrays using the original offsets
+            images_col = pyarrow.ListArray.from_arrays(offsets, flat_ids)
+            image_bytes_col = pyarrow.ListArray.from_arrays(offsets,
+                                                            flat_bytes)
+        else:
+            # Empty or no fields — produce empty lists
+            empty_str = pyarrow.array([], type=pyarrow.string())
+            empty_bin = pyarrow.array([], type=pyarrow.binary())
+            zero_offsets = pyarrow.array([0] * (num_rows + 1),
+                                         type=pyarrow.int32())
+            images_col = pyarrow.ListArray.from_arrays(zero_offsets,
+                                                       empty_str)
+            image_bytes_col = pyarrow.ListArray.from_arrays(zero_offsets,
+                                                            empty_bin)
+
+        # Count images per row for token prefix (using offsets diff)
+        img_counts = pc.subtract(offsets[1:].cast(pyarrow.int64()),
+                                 offsets[:-1].cast(pyarrow.int64()))
+    else:
+        empty_str = pyarrow.array([], type=pyarrow.string())
+        empty_bin = pyarrow.array([], type=pyarrow.binary())
+        zero_offsets = pyarrow.array([0] * (num_rows + 1),
+                                     type=pyarrow.int32())
+        images_col = pyarrow.ListArray.from_arrays(zero_offsets, empty_str)
+        image_bytes_col = pyarrow.ListArray.from_arrays(zero_offsets,
+                                                        empty_bin)
+        img_counts = pyarrow.array([0] * num_rows, type=pyarrow.int64())
+
+    # --- Extract text from clean_content JSON ---
+    # This still requires Python for JSON parsing, but avoids touching
+    # image bytes entirely.
+    clean_content_list = table.column("clean_content").to_pylist()
+    img_counts_list = img_counts.to_pylist()
+    text_col = []
     for i in range(num_rows):
         try:
-            # Extract text from clean_content JSON
-            raw_content = samples["clean_content"][i]
-            if raw_content is None:
+            raw = clean_content_list[i]
+            if raw is None:
                 text_col.append("")
-                images_col.append([])
-                image_bytes_col.append([])
                 continue
-            clean = json.loads(raw_content)
-            text = clean.get("text", "")
-
-            # Flatten image_buffer_list
-            buf_list = samples.get("image_buffer_list", [None] * num_rows)[i]
-            buf_list = buf_list if buf_list else []
-            img_ids = [item.get("image_id", "") for item in buf_list
-                       if isinstance(item, dict)]
-            img_bytes = [item.get("buffer", b"") for item in buf_list
-                         if isinstance(item, dict)]
-
-            # Prepend image special tokens
-            img_tokens = image_special_token * len(img_ids)
-            text_col.append(img_tokens + text)
-            images_col.append(img_ids)
-            image_bytes_col.append(img_bytes)
+            text = json.loads(raw).get("text", "")
+            text_col.append(image_special_token * img_counts_list[i] + text)
         except Exception as e:
-            # Log error without dumping binary data
             logger.warning(
                 f"LAION-COCO preprocessing: skipping row {i}, "
                 f"error: {type(e).__name__}: {str(e)[:200]}"
             )
             text_col.append("")
-            images_col.append([])
-            image_bytes_col.append([])
 
-    samples["text"] = text_col
-    samples["images"] = images_col
-    samples["image_bytes"] = image_bytes_col
+    # --- Build output table, dropping original columns ---
+    cols_to_keep = [name for name in table.column_names
+                    if name not in ("clean_content", "image_buffer_list")]
+    out_table = table.select(cols_to_keep)
+    out_table = out_table.append_column("text", pyarrow.array(text_col))
+    out_table = out_table.append_column("images", images_col)
+    out_table = out_table.append_column("image_bytes", image_bytes_col)
 
-    # Remove original complex columns
-    for col in ["clean_content", "image_buffer_list"]:
-        if col in samples:
-            del samples[col]
-
-    return pyarrow.Table.from_pydict(samples)
+    return out_table
 
 
 def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg) -> ray.data.Dataset:
