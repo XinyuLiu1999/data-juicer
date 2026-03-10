@@ -294,52 +294,98 @@ class ImageMinHashActor:
 
         resize_x, resize_y = 224, 224
 
-        @dali.pipeline_def(
-            batch_size=self.batch_size,
-            num_threads=4,
-            device_id=0 if self.use_cuda else None,
-            exec_async=False,
-            exec_pipelined=False,
-        )
-        def decode_pipeline(use_bytes: bool = True, paths=None):
-            if use_bytes:
-                data = fn.external_source(name="raw_data", batch=True, dtype=types.UINT8)
-            else:
-                data, _ = fn.readers.file(files=paths, random_shuffle=False, name="Reader")
-            images = fn.decoders.image(
-                data,
-                device="mixed" if self.use_cuda else "cpu",
-                output_type=types.RGB,
-                use_fast_idct=True,
-            )
-            images = fn.resize(images, resize_x=resize_x, resize_y=resize_y, interp_type=types.INTERP_LINEAR)
-            return images
-
         if use_bytes:
             image_bytes_list = samples[image_bytes_key]
             batch_data = [np.frombuffer(img_bytes, dtype=np.uint8) for img_bytes in image_bytes_list]
-            pipe = decode_pipeline(use_bytes=use_bytes)
-            pipe.build()
-            pipe.feed_input("raw_data", batch_data)
+            logger.info("Process image with bytes")
         else:
             batch_data = samples[image_key]
-            pipe = decode_pipeline(use_bytes=use_bytes, paths=batch_data)
-            pipe.build()
+            if isinstance(batch_data[0], list):
+                batch_data = [item[0] for item in batch_data]
+            logger.info("Process image with paths")
 
-        # Reset pipeline before feeding new data to clear internal state
-        try:
-            outputs = pipe.run()
-        except Exception as e:
-            logger.error(
-                f"DALI pipeline failed, {e}, chunck data size: {len(batch_data)}, batch_size: {self.batch_size}"
+        def _decode_image_with_dali():
+            @dali.pipeline_def(
+                batch_size=len(batch_data),
+                num_threads=8,
+                device_id=0 if self.use_cuda else None,
+                exec_async=False,
+                exec_pipelined=False,
             )
-            raise
+            def decode_pipeline(use_bytes: bool = True, paths=None):
+                if use_bytes:
+                    data = fn.external_source(name="raw_data", batch=True, dtype=types.UINT8)
+                else:
+                    data, _ = fn.readers.file(files=paths, random_shuffle=False, name="Reader")
+                images = fn.decoders.image(
+                    data,
+                    device="mixed" if self.use_cuda else "cpu",
+                    output_type=types.RGB,
+                    use_fast_idct=True,
+                )
+                images = fn.resize(images, resize_x=resize_x, resize_y=resize_y, interp_type=types.INTERP_LINEAR)
+                return images
 
-        # Convert DALI tensors to PyTorch tensors
-        dali_tensors = outputs[0].as_tensor()
-        del outputs
-        torch_tensors = torch.as_tensor(dali_tensors, device="cuda" if self.use_cuda else "cpu")
-        del dali_tensors
+            if use_bytes:
+                pipe = decode_pipeline(use_bytes=use_bytes)
+                pipe.build()
+                pipe.feed_input("raw_data", batch_data)
+            else:
+                pipe = decode_pipeline(use_bytes=use_bytes, paths=batch_data)
+                pipe.build()
+
+            # Reset pipeline before feeding new data to clear internal state
+            try:
+                outputs = pipe.run()
+            except Exception as e:
+                logger.error(f"DALI pipeline failed, {e}, batch_size: {self.batch_size}")
+                raise
+
+            # Convert DALI tensors to PyTorch tensors
+            dali_tensors = outputs[0].as_tensor()
+            del outputs
+            torch_tensors = torch.as_tensor(dali_tensors, device="cuda" if self.use_cuda else "cpu")
+            del dali_tensors
+
+            return torch_tensors
+
+        def decode_images_with_torch():
+            import io
+
+            from PIL import Image, ImageFile
+
+            ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+            fallback_tensors = []
+            for item in batch_data:
+                try:
+                    if use_bytes:
+                        img_bytes = item.tobytes() if isinstance(item, np.ndarray) else item
+                        img = Image.open(io.BytesIO(img_bytes))
+                    else:
+                        path = item[0] if isinstance(item, list) else item
+                        img = Image.open(path)
+
+                    img = img.convert("RGB")
+                    img = img.resize((resize_x, resize_y), Image.Resampling.BILINEAR)
+
+                    img_tensor = torch.from_numpy(np.array(img))
+                    fallback_tensors.append(img_tensor)
+
+                except Exception as inner_e:
+                    logger.debug(f"Disaster recovery failed for an image ({inner_e}). Using black placeholder.")
+                    fallback_tensors.append(torch.zeros((resize_y, resize_x, 3), dtype=torch.uint8))
+
+            torch_tensors = torch.stack(fallback_tensors).to(self.device)
+
+            return torch_tensors
+
+        try:
+            logger.info(f"Decoding batch of {len(batch_data)} images with DALI")
+            torch_tensors = _decode_image_with_dali()
+        except Exception as e:
+            logger.error(f"DALI decoding failed with error: {e}. Falling back to PyTorch decoding.")
+            torch_tensors = decode_images_with_torch()
 
         return torch_tensors
 
@@ -693,8 +739,7 @@ class RayImageBTSMinhashDeduplicator(Deduplicator):
 
                 # For very large GPUs, cap at 2M samples to maintain reasonable processing time
                 # This is a soft cap - can be adjusted based on performance testing
-                max_reasonable_batch = 2_000_000
-                batch_size = max(1, min(estimated_batch_size, max_reasonable_batch))
+                batch_size = max(1, estimated_batch_size)
 
                 logger.info(
                     f"Setting batch size to {batch_size} based on available GPU memory "
