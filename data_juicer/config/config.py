@@ -404,6 +404,13 @@ def init_configs(args: Optional[List[str]] = None, which_entry: object = None, l
                 "but give each task more CPU time.",
             )
             parser.add_argument(
+                "--laioncoco_preprocessing_batch_size",
+                type=int,
+                default=1000,
+                help="Batch size for LAION-COCO preprocessing map_batches. "  # noqa: E251
+                "Larger values amortize per-batch overhead but use more memory.",
+            )
+            parser.add_argument(
                 "--use_cache",
                 type=bool,
                 default=True,

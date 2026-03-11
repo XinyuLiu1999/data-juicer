@@ -79,6 +79,16 @@ def set_dataset_to_absolute_path(dataset, dataset_path, cfg):
     return dataset
 
 
+def _safe_extract_text(raw, cnt, image_special_token, _loads):
+    """Extract text from a clean_content JSON string."""
+    if raw is None:
+        return ""
+    try:
+        return image_special_token * cnt + _loads(raw).get("text", "")
+    except Exception:
+        return ""
+
+
 def preprocess_laioncoco_ray(table: pyarrow.Table, image_special_token: str) -> pyarrow.Table:
     """
     Ray-compatible LAION-COCO preprocessing operating on PyArrow tables.
@@ -90,8 +100,8 @@ def preprocess_laioncoco_ray(table: pyarrow.Table, image_special_token: str) -> 
     - Flattens 'image_buffer_list' structs into 'images' (IDs) and
       'image_bytes' (raw bytes) columns
 
-    Uses native PyArrow operations to avoid copying image bytes through
-    Python, which is the main performance bottleneck for large tables.
+    Uses per-chunk PyArrow operations to avoid copying image bytes,
+    which is the main performance bottleneck for large tables.
     """
     try:
         import orjson
@@ -104,80 +114,65 @@ def preprocess_laioncoco_ray(table: pyarrow.Table, image_special_token: str) -> 
 
     num_rows = table.num_rows
 
-    # --- Extract image_ids and image_bytes via PyArrow struct access ---
+    # --- Extract image_ids and image_bytes via per-chunk struct access ---
+    # Process each chunk independently to avoid combine_chunks(), which
+    # copies all image bytes into a contiguous buffer. Instead, we flatten
+    # each chunk separately and build chunked arrays (zero-copy).
     if "image_buffer_list" in table.column_names:
         buf_chunked = table.column("image_buffer_list")
-        # Combine chunks into a single array so we can access offsets/flatten
-        buf_col = buf_chunked.combine_chunks()
-        # buf_col is list<struct<image_id: string, buffer: binary>>
-        # Nulls are handled naturally: null list entries produce zero-length
-        # offset spans, resulting in empty lists in the output.
-        # Flatten to access struct fields, then re-nest using offsets
-        offsets = buf_col.offsets
-        flattened = buf_col.flatten()  # struct array
+        id_chunks = []
+        byte_chunks = []
+        img_count_chunks = []
 
-        if len(flattened) > 0 and flattened.type.num_fields > 0:
-            # Extract struct fields by name
-            field_names = [flattened.type.field(i).name
-                           for i in range(flattened.type.num_fields)]
-            if "image_id" in field_names:
-                flat_ids = flattened.field("image_id")
+        for chunk in buf_chunked.chunks:
+            offsets = chunk.offsets
+            flattened = chunk.flatten()
+
+            if len(flattened) > 0 and flattened.type.num_fields > 0:
+                field_names = [flattened.type.field(i).name
+                               for i in range(flattened.type.num_fields)]
+                ids = (flattened.field("image_id")
+                       if "image_id" in field_names
+                       else pyarrow.nulls(len(flattened),
+                                          type=pyarrow.string()))
+                bts = (flattened.field("buffer")
+                       if "buffer" in field_names
+                       else pyarrow.nulls(len(flattened),
+                                          type=pyarrow.binary()))
             else:
-                flat_ids = pyarrow.nulls(len(flattened), type=pyarrow.string())
-            if "buffer" in field_names:
-                flat_bytes = flattened.field("buffer")
-            else:
-                flat_bytes = pyarrow.nulls(len(flattened),
-                                           type=pyarrow.binary())
+                ids = pyarrow.array([], type=pyarrow.string())
+                bts = pyarrow.array([], type=pyarrow.binary())
 
-            # Re-nest into list arrays using the original offsets
-            images_col = pyarrow.ListArray.from_arrays(offsets, flat_ids)
-            image_bytes_col = pyarrow.ListArray.from_arrays(offsets,
-                                                            flat_bytes)
-        else:
-            # Empty or no fields — produce empty lists
-            empty_str = pyarrow.array([], type=pyarrow.string())
-            empty_bin = pyarrow.array([], type=pyarrow.binary())
-            zero_offsets = pyarrow.array([0] * (num_rows + 1),
-                                         type=pyarrow.int32())
-            images_col = pyarrow.ListArray.from_arrays(zero_offsets,
-                                                       empty_str)
-            image_bytes_col = pyarrow.ListArray.from_arrays(zero_offsets,
-                                                            empty_bin)
+            id_chunks.append(
+                pyarrow.ListArray.from_arrays(offsets, ids))
+            byte_chunks.append(
+                pyarrow.ListArray.from_arrays(offsets, bts))
+            img_count_chunks.append(
+                pc.subtract(offsets[1:].cast(pyarrow.int64()),
+                            offsets[:-1].cast(pyarrow.int64())))
 
-        # Count images per row for token prefix (using offsets diff)
-        img_counts = pc.subtract(offsets[1:].cast(pyarrow.int64()),
-                                 offsets[:-1].cast(pyarrow.int64()))
+        images_col = pyarrow.chunked_array(id_chunks)
+        image_bytes_col = pyarrow.chunked_array(byte_chunks)
+        img_counts = pyarrow.chunked_array(img_count_chunks)
     else:
         empty_str = pyarrow.array([], type=pyarrow.string())
         empty_bin = pyarrow.array([], type=pyarrow.binary())
         zero_offsets = pyarrow.array([0] * (num_rows + 1),
                                      type=pyarrow.int32())
-        images_col = pyarrow.ListArray.from_arrays(zero_offsets, empty_str)
-        image_bytes_col = pyarrow.ListArray.from_arrays(zero_offsets,
-                                                        empty_bin)
-        img_counts = pyarrow.array([0] * num_rows, type=pyarrow.int64())
+        images_col = pyarrow.chunked_array(
+            [pyarrow.ListArray.from_arrays(zero_offsets, empty_str)])
+        image_bytes_col = pyarrow.chunked_array(
+            [pyarrow.ListArray.from_arrays(zero_offsets, empty_bin)])
+        img_counts = pyarrow.chunked_array(
+            [pyarrow.array([0] * num_rows, type=pyarrow.int64())])
 
     # --- Extract text from clean_content JSON ---
-    # This still requires Python for JSON parsing, but avoids touching
-    # image bytes entirely.
     clean_content_list = table.column("clean_content").to_pylist()
     img_counts_list = img_counts.to_pylist()
-    text_col = []
-    for i in range(num_rows):
-        try:
-            raw = clean_content_list[i]
-            if raw is None:
-                text_col.append("")
-                continue
-            text = _loads(raw).get("text", "")
-            text_col.append(image_special_token * img_counts_list[i] + text)
-        except Exception as e:
-            logger.warning(
-                f"LAION-COCO preprocessing: skipping row {i}, "
-                f"error: {type(e).__name__}: {str(e)[:200]}"
-            )
-            text_col.append("")
+    text_col = [
+        _safe_extract_text(raw, cnt, image_special_token, _loads)
+        for raw, cnt in zip(clean_content_list, img_counts_list)
+    ]
 
     # --- Build output table, dropping original columns ---
     cols_to_keep = [name for name in table.column_names
@@ -202,15 +197,20 @@ def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg) -> ray.data
             preprocessing_num_cpus = getattr(
                 cfg, "laioncoco_preprocessing_num_cpus", 0.25
             )
+            preprocessing_batch_size = getattr(
+                cfg, "laioncoco_preprocessing_batch_size",
+                DEFAULT_BATCH_SIZE
+            )
             logger.info(
                 f"Applying LAION-COCO preprocessing for Ray dataset "
-                f"(num_cpus={preprocessing_num_cpus})..."
+                f"(num_cpus={preprocessing_num_cpus}, "
+                f"batch_size={preprocessing_batch_size})..."
             )
             dataset = dataset.map_batches(
                 partial(preprocess_laioncoco_ray,
                         image_special_token=SpecialTokens.image),
                 batch_format="pyarrow",
-                batch_size=DEFAULT_BATCH_SIZE,
+                batch_size=preprocessing_batch_size,
                 num_cpus=preprocessing_num_cpus,
             )
         else:
