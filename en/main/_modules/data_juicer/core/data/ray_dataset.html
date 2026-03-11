@@ -602,6 +602,16 @@
 
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_safe_extract_text</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">cnt</span><span class="p">,</span> <span class="n">image_special_token</span><span class="p">,</span> <span class="n">_loads</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract text from a clean_content JSON string.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">raw</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">image_special_token</span> <span class="o">*</span> <span class="n">cnt</span> <span class="o">+</span> <span class="n">_loads</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+
 <div class="viewcode-block" id="preprocess_laioncoco_ray">
 <a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.preprocess_laioncoco_ray">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">preprocess_laioncoco_ray</span><span class="p">(</span><span class="n">table</span><span class="p">:</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">Table</span><span class="p">,</span> <span class="n">image_special_token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">Table</span><span class="p">:</span>
@@ -615,8 +625,8 @@
 <span class="sd">    - Flattens &#39;image_buffer_list&#39; structs into &#39;images&#39; (IDs) and</span>
 <span class="sd">      &#39;image_bytes&#39; (raw bytes) columns</span>
 
-<span class="sd">    Uses native PyArrow operations to avoid copying image bytes through</span>
-<span class="sd">    Python, which is the main performance bottleneck for large tables.</span>
+<span class="sd">    Uses per-chunk PyArrow operations to avoid copying image bytes,</span>
+<span class="sd">    which is the main performance bottleneck for large tables.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">orjson</span>
@@ -629,80 +639,65 @@
 
     <span class="n">num_rows</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">num_rows</span>
 
-    <span class="c1"># --- Extract image_ids and image_bytes via PyArrow struct access ---</span>
+    <span class="c1"># --- Extract image_ids and image_bytes via per-chunk struct access ---</span>
+    <span class="c1"># Process each chunk independently to avoid combine_chunks(), which</span>
+    <span class="c1"># copies all image bytes into a contiguous buffer. Instead, we flatten</span>
+    <span class="c1"># each chunk separately and build chunked arrays (zero-copy).</span>
     <span class="k">if</span> <span class="s2">&quot;image_buffer_list&quot;</span> <span class="ow">in</span> <span class="n">table</span><span class="o">.</span><span class="n">column_names</span><span class="p">:</span>
         <span class="n">buf_chunked</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">column</span><span class="p">(</span><span class="s2">&quot;image_buffer_list&quot;</span><span class="p">)</span>
-        <span class="c1"># Combine chunks into a single array so we can access offsets/flatten</span>
-        <span class="n">buf_col</span> <span class="o">=</span> <span class="n">buf_chunked</span><span class="o">.</span><span class="n">combine_chunks</span><span class="p">()</span>
-        <span class="c1"># buf_col is list&lt;struct&lt;image_id: string, buffer: binary&gt;&gt;</span>
-        <span class="c1"># Nulls are handled naturally: null list entries produce zero-length</span>
-        <span class="c1"># offset spans, resulting in empty lists in the output.</span>
-        <span class="c1"># Flatten to access struct fields, then re-nest using offsets</span>
-        <span class="n">offsets</span> <span class="o">=</span> <span class="n">buf_col</span><span class="o">.</span><span class="n">offsets</span>
-        <span class="n">flattened</span> <span class="o">=</span> <span class="n">buf_col</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>  <span class="c1"># struct array</span>
+        <span class="n">id_chunks</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">byte_chunks</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">img_count_chunks</span> <span class="o">=</span> <span class="p">[]</span>
 
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">flattened</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">flattened</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">num_fields</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="c1"># Extract struct fields by name</span>
-            <span class="n">field_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">flattened</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">.</span><span class="n">name</span>
-                           <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">flattened</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">num_fields</span><span class="p">)]</span>
-            <span class="k">if</span> <span class="s2">&quot;image_id&quot;</span> <span class="ow">in</span> <span class="n">field_names</span><span class="p">:</span>
-                <span class="n">flat_ids</span> <span class="o">=</span> <span class="n">flattened</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="s2">&quot;image_id&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">buf_chunked</span><span class="o">.</span><span class="n">chunks</span><span class="p">:</span>
+            <span class="n">offsets</span> <span class="o">=</span> <span class="n">chunk</span><span class="o">.</span><span class="n">offsets</span>
+            <span class="n">flattened</span> <span class="o">=</span> <span class="n">chunk</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">flattened</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">flattened</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">num_fields</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">field_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">flattened</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">.</span><span class="n">name</span>
+                               <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">flattened</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">num_fields</span><span class="p">)]</span>
+                <span class="n">ids</span> <span class="o">=</span> <span class="p">(</span><span class="n">flattened</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="s2">&quot;image_id&quot;</span><span class="p">)</span>
+                       <span class="k">if</span> <span class="s2">&quot;image_id&quot;</span> <span class="ow">in</span> <span class="n">field_names</span>
+                       <span class="k">else</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">nulls</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">flattened</span><span class="p">),</span>
+                                          <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">()))</span>
+                <span class="n">bts</span> <span class="o">=</span> <span class="p">(</span><span class="n">flattened</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="s2">&quot;buffer&quot;</span><span class="p">)</span>
+                       <span class="k">if</span> <span class="s2">&quot;buffer&quot;</span> <span class="ow">in</span> <span class="n">field_names</span>
+                       <span class="k">else</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">nulls</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">flattened</span><span class="p">),</span>
+                                          <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">binary</span><span class="p">()))</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">flat_ids</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">nulls</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">flattened</span><span class="p">),</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">())</span>
-            <span class="k">if</span> <span class="s2">&quot;buffer&quot;</span> <span class="ow">in</span> <span class="n">field_names</span><span class="p">:</span>
-                <span class="n">flat_bytes</span> <span class="o">=</span> <span class="n">flattened</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="s2">&quot;buffer&quot;</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">flat_bytes</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">nulls</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">flattened</span><span class="p">),</span>
-                                           <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">binary</span><span class="p">())</span>
+                <span class="n">ids</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">())</span>
+                <span class="n">bts</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">binary</span><span class="p">())</span>
 
-            <span class="c1"># Re-nest into list arrays using the original offsets</span>
-            <span class="n">images_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">flat_ids</span><span class="p">)</span>
-            <span class="n">image_bytes_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span>
-                                                            <span class="n">flat_bytes</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="c1"># Empty or no fields — produce empty lists</span>
-            <span class="n">empty_str</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">())</span>
-            <span class="n">empty_bin</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">binary</span><span class="p">())</span>
-            <span class="n">zero_offsets</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">num_rows</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
-                                         <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int32</span><span class="p">())</span>
-            <span class="n">images_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">zero_offsets</span><span class="p">,</span>
-                                                       <span class="n">empty_str</span><span class="p">)</span>
-            <span class="n">image_bytes_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">zero_offsets</span><span class="p">,</span>
-                                                            <span class="n">empty_bin</span><span class="p">)</span>
+            <span class="n">id_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">ids</span><span class="p">))</span>
+            <span class="n">byte_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">bts</span><span class="p">))</span>
+            <span class="n">img_count_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">pc</span><span class="o">.</span><span class="n">subtract</span><span class="p">(</span><span class="n">offsets</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int64</span><span class="p">()),</span>
+                            <span class="n">offsets</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int64</span><span class="p">())))</span>
 
-        <span class="c1"># Count images per row for token prefix (using offsets diff)</span>
-        <span class="n">img_counts</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">subtract</span><span class="p">(</span><span class="n">offsets</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int64</span><span class="p">()),</span>
-                                 <span class="n">offsets</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int64</span><span class="p">()))</span>
+        <span class="n">images_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span><span class="n">id_chunks</span><span class="p">)</span>
+        <span class="n">image_bytes_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span><span class="n">byte_chunks</span><span class="p">)</span>
+        <span class="n">img_counts</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span><span class="n">img_count_chunks</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">empty_str</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">())</span>
         <span class="n">empty_bin</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">binary</span><span class="p">())</span>
         <span class="n">zero_offsets</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">num_rows</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
                                      <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int32</span><span class="p">())</span>
-        <span class="n">images_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">zero_offsets</span><span class="p">,</span> <span class="n">empty_str</span><span class="p">)</span>
-        <span class="n">image_bytes_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">zero_offsets</span><span class="p">,</span>
-                                                        <span class="n">empty_bin</span><span class="p">)</span>
-        <span class="n">img_counts</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">num_rows</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int64</span><span class="p">())</span>
+        <span class="n">images_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">zero_offsets</span><span class="p">,</span> <span class="n">empty_str</span><span class="p">)])</span>
+        <span class="n">image_bytes_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">zero_offsets</span><span class="p">,</span> <span class="n">empty_bin</span><span class="p">)])</span>
+        <span class="n">img_counts</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">num_rows</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int64</span><span class="p">())])</span>
 
     <span class="c1"># --- Extract text from clean_content JSON ---</span>
-    <span class="c1"># This still requires Python for JSON parsing, but avoids touching</span>
-    <span class="c1"># image bytes entirely.</span>
     <span class="n">clean_content_list</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">column</span><span class="p">(</span><span class="s2">&quot;clean_content&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to_pylist</span><span class="p">()</span>
     <span class="n">img_counts_list</span> <span class="o">=</span> <span class="n">img_counts</span><span class="o">.</span><span class="n">to_pylist</span><span class="p">()</span>
-    <span class="n">text_col</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_rows</span><span class="p">):</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">raw</span> <span class="o">=</span> <span class="n">clean_content_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">raw</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">text_col</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
-                <span class="k">continue</span>
-            <span class="n">text</span> <span class="o">=</span> <span class="n">_loads</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-            <span class="n">text_col</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">image_special_token</span> <span class="o">*</span> <span class="n">img_counts_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">text</span><span class="p">)</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;LAION-COCO preprocessing: skipping row </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">, &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;error: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)[:</span><span class="mi">200</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="p">)</span>
-            <span class="n">text_col</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="n">text_col</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">_safe_extract_text</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">cnt</span><span class="p">,</span> <span class="n">image_special_token</span><span class="p">,</span> <span class="n">_loads</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">raw</span><span class="p">,</span> <span class="n">cnt</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">clean_content_list</span><span class="p">,</span> <span class="n">img_counts_list</span><span class="p">)</span>
+    <span class="p">]</span>
 
     <span class="c1"># --- Build output table, dropping original columns ---</span>
     <span class="n">cols_to_keep</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">table</span><span class="o">.</span><span class="n">column_names</span>
@@ -727,13 +722,24 @@
         <span class="k">if</span> <span class="s2">&quot;clean_content&quot;</span> <span class="ow">in</span> <span class="n">dataset</span><span class="o">.</span><span class="n">columns</span><span class="p">():</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.mm_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpecialTokens</span>
 
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Applying LAION-COCO preprocessing for Ray dataset...&quot;</span><span class="p">)</span>
+            <span class="n">preprocessing_num_cpus</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+                <span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;laioncoco_preprocessing_num_cpus&quot;</span><span class="p">,</span> <span class="mf">0.25</span>
+            <span class="p">)</span>
+            <span class="n">preprocessing_batch_size</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+                <span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;laioncoco_preprocessing_batch_size&quot;</span><span class="p">,</span>
+                <span class="n">DEFAULT_BATCH_SIZE</span>
+            <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Applying LAION-COCO preprocessing for Ray dataset &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;(num_cpus=</span><span class="si">{</span><span class="n">preprocessing_num_cpus</span><span class="si">}</span><span class="s2">, &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;batch_size=</span><span class="si">{</span><span class="n">preprocessing_batch_size</span><span class="si">}</span><span class="s2">)...&quot;</span>
+            <span class="p">)</span>
             <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">map_batches</span><span class="p">(</span>
                 <span class="n">partial</span><span class="p">(</span><span class="n">preprocess_laioncoco_ray</span><span class="p">,</span>
                         <span class="n">image_special_token</span><span class="o">=</span><span class="n">SpecialTokens</span><span class="o">.</span><span class="n">image</span><span class="p">),</span>
                 <span class="n">batch_format</span><span class="o">=</span><span class="s2">&quot;pyarrow&quot;</span><span class="p">,</span>
-                <span class="n">batch_size</span><span class="o">=</span><span class="n">DEFAULT_BATCH_SIZE</span><span class="p">,</span>
-                <span class="n">num_cpus</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
+                <span class="n">batch_size</span><span class="o">=</span><span class="n">preprocessing_batch_size</span><span class="p">,</span>
+                <span class="n">num_cpus</span><span class="o">=</span><span class="n">preprocessing_num_cpus</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;LAION-COCO preprocessing already applied, skipping.&quot;</span><span class="p">)</span>

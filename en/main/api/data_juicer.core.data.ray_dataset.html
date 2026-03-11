@@ -546,8 +546,8 @@ expected by Data-Juicer:
 <li><p>Flattens ‘image_buffer_list’ structs into ‘images’ (IDs) and
 ‘image_bytes’ (raw bytes) columns</p></li>
 </ul>
-<p>Uses native PyArrow operations to avoid copying image bytes through
-Python, which is the main performance bottleneck for large tables.</p>
+<p>Uses per-chunk PyArrow operations to avoid copying image bytes,
+which is the main performance bottleneck for large tables.</p>
 </dd></dl>
 
 <dl class="py function">

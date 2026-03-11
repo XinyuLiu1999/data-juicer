@@ -918,6 +918,22 @@
                 <span class="s2">&quot;into &#39;images&#39; (image IDs) and &#39;image_bytes&#39; (raw bytes) columns.&quot;</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+                <span class="s2">&quot;--laioncoco_preprocessing_num_cpus&quot;</span><span class="p">,</span>
+                <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
+                <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Number of CPUs per preprocessing task for LAION-COCO format. &quot;</span>  <span class="c1"># noqa: E251</span>
+                <span class="s2">&quot;Lower values (e.g. 0.25) allow more concurrent tasks but may cause &quot;</span>
+                <span class="s2">&quot;CPU oversubscription. Higher values (e.g. 1.0) reduce concurrency &quot;</span>
+                <span class="s2">&quot;but give each task more CPU time.&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+                <span class="s2">&quot;--laioncoco_preprocessing_batch_size&quot;</span><span class="p">,</span>
+                <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+                <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Batch size for LAION-COCO preprocessing map_batches. &quot;</span>  <span class="c1"># noqa: E251</span>
+                <span class="s2">&quot;Larger values amortize per-batch overhead but use more memory.&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
                 <span class="s2">&quot;--use_cache&quot;</span><span class="p">,</span>
                 <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
                 <span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
