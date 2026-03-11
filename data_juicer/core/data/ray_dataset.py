@@ -143,6 +143,14 @@ def preprocess_laioncoco_ray(table: pyarrow.Table, image_special_token: str) -> 
                 ids = pyarrow.array([], type=pyarrow.string())
                 bts = pyarrow.array([], type=pyarrow.binary())
 
+            # Zero-base offsets: sliced chunks (from Ray batching) may
+            # have offsets that don't start at 0 (e.g. [3, 4, 5]),
+            # while flatten() returns only the values for this slice.
+            # ListArray.from_arrays requires offsets starting at 0.
+            first_offset = offsets[0].as_py()
+            if first_offset != 0:
+                offsets = pc.subtract(offsets, first_offset)
+
             id_chunks.append(
                 pyarrow.ListArray.from_arrays(offsets, ids))
             byte_chunks.append(
