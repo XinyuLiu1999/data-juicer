@@ -93,7 +93,12 @@ def preprocess_laioncoco_ray(table: pyarrow.Table, image_special_token: str) -> 
     Uses native PyArrow operations to avoid copying image bytes through
     Python, which is the main performance bottleneck for large tables.
     """
-    import json
+    try:
+        import orjson
+        _loads = orjson.loads
+    except ImportError:
+        import json
+        _loads = json.loads
 
     import pyarrow.compute as pc
 
@@ -165,7 +170,7 @@ def preprocess_laioncoco_ray(table: pyarrow.Table, image_special_token: str) -> 
             if raw is None:
                 text_col.append("")
                 continue
-            text = json.loads(raw).get("text", "")
+            text = _loads(raw).get("text", "")
             text_col.append(image_special_token * img_counts_list[i] + text)
         except Exception as e:
             logger.warning(
@@ -200,6 +205,7 @@ def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg) -> ray.data
                         image_special_token=SpecialTokens.image),
                 batch_format="pyarrow",
                 batch_size=DEFAULT_BATCH_SIZE,
+                num_cpus=0.25,
             )
         else:
             logger.info("LAION-COCO preprocessing already applied, skipping.")
