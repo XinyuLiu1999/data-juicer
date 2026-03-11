@@ -395,6 +395,15 @@ def init_configs(args: Optional[List[str]] = None, which_entry: object = None, l
                 "into 'images' (image IDs) and 'image_bytes' (raw bytes) columns.",
             )
             parser.add_argument(
+                "--laioncoco_preprocessing_num_cpus",
+                type=float,
+                default=0.25,
+                help="Number of CPUs per preprocessing task for LAION-COCO format. "  # noqa: E251
+                "Lower values (e.g. 0.25) allow more concurrent tasks but may cause "
+                "CPU oversubscription. Higher values (e.g. 1.0) reduce concurrency "
+                "but give each task more CPU time.",
+            )
+            parser.add_argument(
                 "--use_cache",
                 type=bool,
                 default=True,
