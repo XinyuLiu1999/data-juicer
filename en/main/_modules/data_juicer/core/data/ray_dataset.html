@@ -668,6 +668,14 @@
                 <span class="n">ids</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">())</span>
                 <span class="n">bts</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">binary</span><span class="p">())</span>
 
+            <span class="c1"># Zero-base offsets: sliced chunks (from Ray batching) may</span>
+            <span class="c1"># have offsets that don&#39;t start at 0 (e.g. [3, 4, 5]),</span>
+            <span class="c1"># while flatten() returns only the values for this slice.</span>
+            <span class="c1"># ListArray.from_arrays requires offsets starting at 0.</span>
+            <span class="n">first_offset</span> <span class="o">=</span> <span class="n">offsets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">as_py</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">first_offset</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">offsets</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">subtract</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">first_offset</span><span class="p">)</span>
+
             <span class="n">id_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">ids</span><span class="p">))</span>
             <span class="n">byte_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
