@@ -40,11 +40,3 @@ Tags 标签: image, ray
 
 - [source code 源代码](https://www.google.com/search?q=../../../data_juicer/ops/deduplicator/ray_bts_image_minhash_deduplicator.py)
 - [Return operator list 返回算子列表](https://www.google.com/search?q=../../Operators.md)
-
-```
-
-```
-
-```
-
-```
