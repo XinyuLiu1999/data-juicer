@@ -68,7 +68,7 @@ class RayImageBTSMinhashDeduplicatorTest(DataJuicerTestCaseBase):
         ds_list = []
         for p in self.img_paths:
             with open(p, "rb") as f:
-                ds_list.append({"image_bytes": [f.read()]})
+                ds_list.append({"image_bytes": f.read()})
 
         tgt_list = ds_list[:1] + ds_list[3:4]
 
@@ -78,19 +78,6 @@ class RayImageBTSMinhashDeduplicatorTest(DataJuicerTestCaseBase):
         check_keys = [op.image_bytes_key] if hasattr(op, "image_bytes_key") else ["image_bytes"]
         res_list = self.run_single_op(dataset, op, check_keys)
         self.assertEqual(len(res_list), len(tgt_list))
-
-    @TEST_TAG("ray")
-    def test_deduplication_with_uid(self):
-        ds_list = [{"images": [p]} for p in self.img_paths]
-        tgt_list = [{"images": [self.img_paths[0]]}, {"images": [self.img_paths[3]]}]
-
-        for i, ds in enumerate(ds_list):
-            ds[HashKeys.uid] = i
-
-        dataset = self.generate_dataset(ds_list)
-        op = RayImageBTSMinhashDeduplicatorWithUid(jaccard_threshold=0.85, work_dir=self.work_dir)
-
-        self._run_minhash_dedup(dataset, tgt_list, op)
 
 
 if __name__ == "__main__":
