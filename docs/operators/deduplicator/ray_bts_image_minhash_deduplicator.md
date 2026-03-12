@@ -1,6 +1,3 @@
-这是一个基于您提供的 `ray_bts_image_minhash_deduplicator.py` 源码和参考文档格式，为 `ray_bts_image_minhash_deduplicator` 算子设计的文档。
-
-````markdown
 # ray_bts_image_minhash_deduplicator
 
 A distributed image deduplicator using MinHash LSH and BTS Union-Find on Ray.
@@ -39,24 +36,6 @@ Tags 标签: image, ray
 | `args`                         |                                                                                                       | `''`                                      |                                                                                                                                                                                                                                           |
 | `kwargs`                       |                                                                                                       | `''`                                      |                                                                                                                                                                                                                                           |
 
-## 📊 Effect demonstration 效果演示
-
-### test_image_deduplication
-
-```python
-RayImageBTSMinhashDeduplicator(jaccard_threshold=0.85, work_dir=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'image_dedup'))
-```
-````
-
-#### 📥 input data 输入数据
-
-#### 📤 output data 输出数据
-
-#### ✨ explanation 解释
-
-The operator extracts visual tokens from the input images using a pre-trained Vision Transformer model, computes MinHash signatures, and applies LSH to group similar images. It then uses a distributed union-find algorithm to identify and remove near-duplicates. In this example, `cat_playing_watermarked.jpg` and `cat_playing_resized.jpg` are identified as near-duplicates of `cat_playing.jpg` based on the deep semantic hashing (Jaccard similarity >= 0.85) and are filtered out, leaving only unique images.
-算子使用预训练的视觉 Transformer 模型从输入图像中提取视觉 token，计算 MinHash 签名，并应用 LSH 对相似图像进行分组。然后它使用分布式并查集算法来识别和删除近似重复项。在这个例子中，基于深度语义哈希，`cat_playing_watermarked.jpg` 和 `cat_playing_resized.jpg` 被识别为 `cat_playing.jpg` 的近似重复项（Jaccard 相似度 >= 0.85）并被过滤掉，只留下独特的图像。
-
 ## 🔗 related links 相关链接
 
 - [source code 源代码](https://www.google.com/search?q=../../../data_juicer/ops/deduplicator/ray_bts_image_minhash_deduplicator.py)
@@ -64,6 +43,8 @@ The operator extracts visual tokens from the input images using a pre-trained Vi
 
 ```
 
-Is there anything else regarding Data Juicer documentation or other operators you'd like me to assist with?
+```
+
+```
 
 ```
