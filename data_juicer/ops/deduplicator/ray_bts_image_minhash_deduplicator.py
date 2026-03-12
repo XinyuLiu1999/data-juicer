@@ -230,6 +230,7 @@ def get_remote_classes(actor_memory: Optional[int] = None):
     remote_args = {"scheduling_strategy": "SPREAD"}
     if actor_memory is not None:
         remote_args["memory"] = actor_memory
+        remote_args["num_cpus"] = 0.1
 
     return {
         "IdGenerator": ray.remote(IdGenerator),
@@ -276,10 +277,13 @@ class ImageMinHashActor:
         Returns:
             torch.Tensor: [N, C, H, W] tensor on GPU with all decoded images
         """
+        import io
+
         import nvidia.dali as dali
         import nvidia.dali.fn as fn
         import nvidia.dali.types as types
         import torch
+        from PIL import Image, ImageFile
 
         # Determine input source: prefer image_bytes_key, fallback to image_key
         use_bytes = (
@@ -297,12 +301,12 @@ class ImageMinHashActor:
         if use_bytes:
             image_bytes_list = samples[image_bytes_key]
             batch_data = [np.frombuffer(img_bytes, dtype=np.uint8) for img_bytes in image_bytes_list]
-            logger.info("Process image with bytes")
+            logger.info(f"Loading with image bytes")
         else:
             batch_data = samples[image_key]
             if isinstance(batch_data[0], list):
                 batch_data = [item[0] for item in batch_data]
-            logger.info("Process image with paths")
+            logger.info(f"Loading with image paths")
 
         def _decode_image_with_dali():
             @dali.pipeline_def(
@@ -334,7 +338,6 @@ class ImageMinHashActor:
                 pipe = decode_pipeline(use_bytes=use_bytes, paths=batch_data)
                 pipe.build()
 
-            # Reset pipeline before feeding new data to clear internal state
             try:
                 outputs = pipe.run()
             except Exception as e:
@@ -350,9 +353,6 @@ class ImageMinHashActor:
             return torch_tensors
 
         def decode_images_with_torch():
-            import io
-
-            from PIL import Image, ImageFile
 
             ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -733,13 +733,11 @@ class RayImageBTSMinhashDeduplicator(Deduplicator):
             gpu_memory = ray_available_gpu_memories()
             if len(gpu_memory):
                 min_memory = min(gpu_memory)
-                # Use 80% of available memory to leave room for overhead
-                safe_memory = min_memory * 0.8
+                # Use 70% of available memory to leave room for overhead
+                safe_memory = min_memory * 0.7
                 estimated_batch_size = int(safe_memory / self.memory_per_sample)
-
-                # For very large GPUs, cap at 2M samples to maintain reasonable processing time
-                # This is a soft cap - can be adjusted based on performance testing
-                batch_size = max(1, estimated_batch_size)
+                max_reasonable_batch = 2_048
+                batch_size = max(1, min(max_reasonable_batch, estimated_batch_size))
 
                 logger.info(
                     f"Setting batch size to {batch_size} based on available GPU memory "
@@ -754,7 +752,7 @@ class RayImageBTSMinhashDeduplicator(Deduplicator):
             # Get CPU count for concurrency
             cpu_count = int(ray.cluster_resources().get("CPU", 1))
             total_cluster_memory = int(ray.cluster_resources().get("memory", 0))
-            safe_memory_total = total_cluster_memory * 0.8
+            safe_memory_total = total_cluster_memory * 0.7
 
             concurrency = max(1, cpu_count // 2)  # Use half of CPUs for workers
             memory_budget_per_worker = safe_memory_total / concurrency
@@ -822,49 +820,55 @@ class RayImageBTSMinhashDeduplicatorWithUid(RayImageBTSMinhashDeduplicator):
         self._ensure_actors()
 
         start_time = time.time()
-
         if self.use_cuda():
             logger.info("Using GPU for MinHash computation")
+            # Get available GPU count and set concurrency
             gpu_count = ray_gpu_count()
             if gpu_count == 0:
                 logger.error("No GPUs available in Ray cluster")
                 raise RuntimeError("No GPUs available in Ray cluster")
 
-            concurrency = max(1, gpu_count)
+            concurrency = max(1, gpu_count)  # Ensure at least 1 concurrent task
+            logger.info(f"Setting GPU concurrency to {concurrency} based on available GPUs")
+
+            # Get available GPU memory and set batch size
             gpu_memory = ray_available_gpu_memories()
             if len(gpu_memory):
                 min_memory = min(gpu_memory)
-                safe_memory = min_memory * 0.8
+                # Use 70% of available memory to leave room for overhead
+                safe_memory = min_memory * 0.7
                 estimated_batch_size = int(safe_memory / self.memory_per_sample)
-                max_reasonable_batch = 2_000_000
-                batch_size = max(1, min(estimated_batch_size, max_reasonable_batch))
+                max_reasonable_batch = 2_048
+                batch_size = max(1, min(max_reasonable_batch, estimated_batch_size))
+
+                logger.info(
+                    f"Setting batch size to {batch_size} based on available GPU memory "
+                    f"({min_memory}MB), memory per sample ({self.memory_per_sample}MB), "
+                    f"and safe memory limit ({safe_memory}MB)"
+                )
             else:
                 batch_size = self.minhash_batch_size
+                logger.info(f"Using default batch size of {batch_size}")
         else:
             logger.info("Using CPU for MinHash computation")
+            # Get CPU count for concurrency
             cpu_count = int(ray.cluster_resources().get("CPU", 1))
             total_cluster_memory = int(ray.cluster_resources().get("memory", 0))
-            safe_memory_total = total_cluster_memory * 0.8
-            concurrency = max(1, cpu_count // 2)
+            safe_memory_total = total_cluster_memory * 0.7
+
+            concurrency = max(1, cpu_count // 2)  # Use half of CPUs for workers
             memory_budget_per_worker = safe_memory_total / concurrency
+            logger.info(f"Setting CPU concurrency to {concurrency} based on available CPUs")
             bytes_per_sample = self.memory_per_sample * 1024 * 1024
             estimated_batch_size = int(memory_budget_per_worker / bytes_per_sample)
             batch_size = max(32, min(estimated_batch_size, 1024))
 
+            batch_size = batch_size
             logger.info(f"Using batch size of {batch_size} for CPU MinHash computation")
-
-        def band_existing_uid(table: pa.Table) -> pa.Table:
-            if HashKeys.uid not in table.column_names:
-                raise ValueError(f"Dataset missing required column: {HashKeys.uid} for {OP_NAME}_with_uid operator.")
-
-            self.band_minhash(table["_minhash"], table[HashKeys.uid])
-
-            return table.drop_columns(["_minhash"])
 
         from ray.data._internal.util import get_compute_strategy
 
-        compute = get_compute_strategy(ImageMinHashActor, concurrency=int(concurrency))
-
+        compute = get_compute_strategy(ImageMinHashActor, concurrency=(int(concurrency) // 4, int(concurrency)))
         dataset = dataset.map_batches(
             ImageMinHashActor,
             fn_constructor_kwargs={
@@ -883,14 +887,19 @@ class RayImageBTSMinhashDeduplicatorWithUid(RayImageBTSMinhashDeduplicator):
             batch_size=batch_size,
         )
 
+        def band_existing_uid(table: pa.Table) -> pa.Table:
+            if HashKeys.uid not in table.column_names:
+                raise ValueError(f"Dataset missing required column: {HashKeys.uid} for {OP_NAME}_with_uid operator.")
+
+            self.band_minhash(table["_minhash"], table[HashKeys.uid])
+
+            return table.drop_columns(["_minhash"])
+
         dataset = dataset.map_batches(
             band_existing_uid,
             batch_format="pyarrow",
             zero_copy_batch=True,
-        )
-
-        dataset_count = dataset.count()
-        logger.info(f"Processed {dataset_count} samples for MinHash calculation.")
+        ).materialize()
 
         end_time = time.time()
         logger.info(f"MinHash calculation and banding time = {end_time - start_time}")
