@@ -88,7 +88,7 @@ All the specific operators are listed below, each featured with several capabili
 | document_simhash_deduplicator | 🔤Text 💻CPU 🟢Stable | Deduplicates samples at the document level using SimHash. 使用SimHash在文档级别删除重复的样本。 | [info](operators/deduplicator/document_simhash_deduplicator.md) | - |
 | image_deduplicator | 🏞Image 💻CPU 🟢Stable | Deduplicates samples at the document level by exact matching of images. 通过图像的精确匹配在文档级别删除重复的样本。 | [info](operators/deduplicator/image_deduplicator.md) | - |
 | ray_basic_deduplicator | 💻CPU 🔴Alpha | Backend for deduplicator. deduplicator的后端。 | - | - |
-| ray_bts_image_minhash_deduplicator | 🏞Image 🚀GPU 🧩HF 🔴Alpha | A distributed implementation of Union-Find with load balancing. 具有负载平衡的Union-Find的分布式实现。 | - | - |
+| ray_bts_image_minhash_deduplicator | 🏞Image 🚀GPU 🧩HF 🟡Beta | A distributed implementation of Union-Find with load balancing. 具有负载平衡的Union-Find的分布式实现。 | [info](operators/deduplicator/ray_bts_image_minhash_deduplicator.md) | - |
 | ray_bts_minhash_deduplicator | 🔤Text 💻CPU 🟡Beta | A distributed implementation of Union-Find with load balancing. 具有负载平衡的Union-Find的分布式实现。 | [info](operators/deduplicator/ray_bts_minhash_deduplicator.md) | - |
 | ray_document_deduplicator | 🔤Text 💻CPU 🟡Beta | Deduplicates samples at the document level using exact matching in Ray distributed mode. 在Ray分布式模式下使用精确匹配在文档级别删除重复的样本。 | [info](operators/deduplicator/ray_document_deduplicator.md) | - |
 | ray_image_deduplicator | 🏞Image 💻CPU 🟡Beta | Deduplicates samples at the document level using exact matching of images in Ray distributed mode. 在光线分布模式下使用图像的精确匹配在文档级别删除重复样本。 | [info](operators/deduplicator/ray_image_deduplicator.md) | - |
