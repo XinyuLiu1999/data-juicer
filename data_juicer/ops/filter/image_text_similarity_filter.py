@@ -239,7 +239,7 @@ class ImageTextSimilarityFilter(Filter):
                 text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
             # Compute per-chunk similarity
-            logit_scale = model.logit_scale.exp()
+            logit_scale = model.logit_scale.exp().detach()
             for chunk_idx in range(len(chunk_texts)):
                 start, count = image_offsets[chunk_idx]
                 chunk_img_feats = image_features[start:start + count]
