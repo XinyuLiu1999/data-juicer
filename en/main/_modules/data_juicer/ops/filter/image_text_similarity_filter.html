@@ -516,6 +516,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">PIL</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImageOps</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.constant</span><span class="w"> </span><span class="kn">import</span> <span class="n">Fields</span><span class="p">,</span> <span class="n">StatsKeys</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.lazy_loader</span><span class="w"> </span><span class="kn">import</span> <span class="n">LazyLoader</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.mm_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">SpecialTokens</span><span class="p">,</span>
     <span class="n">load_data_with_context</span><span class="p">,</span>
@@ -525,6 +526,8 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.model_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_model</span><span class="p">,</span> <span class="n">prepare_model</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">..base_op</span><span class="w"> </span><span class="kn">import</span> <span class="n">OPERATORS</span><span class="p">,</span> <span class="n">Filter</span>
+
+<span class="n">torch</span> <span class="o">=</span> <span class="n">LazyLoader</span><span class="p">(</span><span class="s2">&quot;torch&quot;</span><span class="p">)</span>
 
 <span class="n">OP_NAME</span> <span class="o">=</span> <span class="s2">&quot;image_text_similarity_filter&quot;</span>
 
@@ -666,6 +669,125 @@
         <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">stats</span><span class="p">][</span><span class="n">StatsKeys</span><span class="o">.</span><span class="n">image_text_similarity</span><span class="p">]</span> <span class="o">=</span> <span class="n">similarity</span>
 
         <span class="k">return</span> <span class="n">sample</span></div>
+
+
+<div class="viewcode-block" id="ImageTextSimilarityFilter.compute_stats_batched">
+<a class="viewcode-back" href="../../../../api/data_juicer.ops.filter.image_text_similarity_filter.html#data_juicer.ops.filter.ImageTextSimilarityFilter.compute_stats_batched">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_stats_batched</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">samples</span><span class="p">,</span> <span class="n">rank</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="n">num_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">samples</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">stats</span><span class="p">])</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="n">samples</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+
+        <span class="c1"># Collect all (text, images) chunks across all samples</span>
+        <span class="c1"># Each chunk becomes one CLIP forward pass unit</span>
+        <span class="n">chunk_texts</span> <span class="o">=</span> <span class="p">[]</span>      <span class="c1"># text string per chunk</span>
+        <span class="n">chunk_images</span> <span class="o">=</span> <span class="p">[]</span>     <span class="c1"># list of PIL images per chunk</span>
+        <span class="c1"># Map: sample_idx -&gt; list of chunk indices</span>
+        <span class="n">sample_chunk_map</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_samples</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">StatsKeys</span><span class="o">.</span><span class="n">image_text_similarity</span> <span class="ow">in</span> <span class="n">samples</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">stats</span><span class="p">][</span><span class="n">i</span><span class="p">]:</span>
+                <span class="n">sample_chunk_map</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+                <span class="k">continue</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">samples</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">samples</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">image_key</span><span class="p">][</span><span class="n">i</span><span class="p">]:</span>
+                <span class="n">samples</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">stats</span><span class="p">][</span><span class="n">i</span><span class="p">][</span><span class="n">StatsKeys</span><span class="o">.</span><span class="n">image_text_similarity</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+                <span class="n">sample_chunk_map</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+                <span class="k">continue</span>
+
+            <span class="n">this_sample</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">samples</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">}</span>
+            <span class="n">loaded_image_keys</span> <span class="o">=</span> <span class="n">this_sample</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">image_key</span><span class="p">]</span>
+            <span class="n">this_sample</span><span class="p">,</span> <span class="n">images</span> <span class="o">=</span> <span class="n">load_data_with_context</span><span class="p">(</span>
+                <span class="n">this_sample</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">loaded_image_keys</span><span class="p">,</span> <span class="n">load_image</span><span class="p">,</span> <span class="n">mm_bytes_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">image_bytes_key</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">context</span><span class="p">:</span>
+                <span class="n">samples</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">context</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">this_sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">context</span><span class="p">]</span>
+
+            <span class="n">text</span> <span class="o">=</span> <span class="n">this_sample</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">text_key</span><span class="p">]</span>
+            <span class="n">offset</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">chunk_indices</span> <span class="o">=</span> <span class="p">[]</span>
+
+            <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">SpecialTokens</span><span class="o">.</span><span class="n">eoc</span><span class="p">):</span>
+                <span class="n">count</span> <span class="o">=</span> <span class="n">chunk</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">SpecialTokens</span><span class="o">.</span><span class="n">image</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">count</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">continue</span>
+
+                <span class="n">text_chunk</span> <span class="o">=</span> <span class="n">remove_special_tokens</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
+                <span class="n">image_chunk</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">image_key</span> <span class="ow">in</span> <span class="n">loaded_image_keys</span><span class="p">[</span><span class="n">offset</span><span class="p">:</span><span class="n">offset</span> <span class="o">+</span> <span class="n">count</span><span class="p">]:</span>
+                    <span class="n">image</span> <span class="o">=</span> <span class="n">images</span><span class="p">[</span><span class="n">image_key</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">horizontal_flip</span><span class="p">:</span>
+                        <span class="n">image</span> <span class="o">=</span> <span class="n">ImageOps</span><span class="o">.</span><span class="n">mirror</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">vertical_flip</span><span class="p">:</span>
+                        <span class="n">image</span> <span class="o">=</span> <span class="n">ImageOps</span><span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+                    <span class="n">image_chunk</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+
+                <span class="n">chunk_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">chunk_texts</span><span class="p">))</span>
+                <span class="n">chunk_texts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">text_chunk</span><span class="p">)</span>
+                <span class="n">chunk_images</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">image_chunk</span><span class="p">)</span>
+                <span class="n">offset</span> <span class="o">+=</span> <span class="n">count</span>
+
+            <span class="n">sample_chunk_map</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">chunk_indices</span><span class="p">)</span>
+
+        <span class="c1"># Batched inference: process all chunks at once using separate</span>
+        <span class="c1"># image/text encoding for efficiency</span>
+        <span class="n">chunk_similarities</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">chunk_texts</span><span class="p">:</span>
+            <span class="n">model</span><span class="p">,</span> <span class="n">processor</span> <span class="o">=</span> <span class="n">get_model</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_key</span><span class="p">,</span> <span class="n">rank</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_cuda</span><span class="p">())</span>
+
+            <span class="c1"># Collect all images flat for batched image encoding</span>
+            <span class="n">all_images_flat</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">image_offsets</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># (start, count) per chunk</span>
+            <span class="k">for</span> <span class="n">img_list</span> <span class="ow">in</span> <span class="n">chunk_images</span><span class="p">:</span>
+                <span class="n">image_offsets</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">all_images_flat</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">img_list</span><span class="p">)))</span>
+                <span class="n">all_images_flat</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">img_list</span><span class="p">)</span>
+
+            <span class="c1"># Batched image encoding</span>
+            <span class="n">image_inputs</span> <span class="o">=</span> <span class="n">processor</span><span class="p">(</span>
+                <span class="n">images</span><span class="o">=</span><span class="n">all_images_flat</span><span class="p">,</span>
+                <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">,</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+            <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+                <span class="n">image_features</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">get_image_features</span><span class="p">(</span><span class="o">**</span><span class="n">image_inputs</span><span class="p">)</span>
+                <span class="n">image_features</span> <span class="o">=</span> <span class="n">image_features</span> <span class="o">/</span> <span class="n">image_features</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+            <span class="c1"># Batched text encoding</span>
+            <span class="n">text_inputs</span> <span class="o">=</span> <span class="n">processor</span><span class="p">(</span>
+                <span class="n">text</span><span class="o">=</span><span class="n">chunk_texts</span><span class="p">,</span>
+                <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">,</span>
+                <span class="n">truncation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">max_length</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">text_config</span><span class="o">.</span><span class="n">max_position_embeddings</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+            <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+                <span class="n">text_features</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">get_text_features</span><span class="p">(</span><span class="o">**</span><span class="n">text_inputs</span><span class="p">)</span>
+                <span class="n">text_features</span> <span class="o">=</span> <span class="n">text_features</span> <span class="o">/</span> <span class="n">text_features</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+            <span class="c1"># Compute per-chunk similarity</span>
+            <span class="n">logit_scale</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">logit_scale</span><span class="o">.</span><span class="n">exp</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">chunk_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">chunk_texts</span><span class="p">)):</span>
+                <span class="n">start</span><span class="p">,</span> <span class="n">count</span> <span class="o">=</span> <span class="n">image_offsets</span><span class="p">[</span><span class="n">chunk_idx</span><span class="p">]</span>
+                <span class="n">chunk_img_feats</span> <span class="o">=</span> <span class="n">image_features</span><span class="p">[</span><span class="n">start</span><span class="p">:</span><span class="n">start</span> <span class="o">+</span> <span class="n">count</span><span class="p">]</span>
+                <span class="n">chunk_text_feat</span> <span class="o">=</span> <span class="n">text_features</span><span class="p">[</span><span class="n">chunk_idx</span><span class="p">:</span><span class="n">chunk_idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+
+                <span class="c1"># logits_per_text shape: [1, count]</span>
+                <span class="n">chunk_logits</span> <span class="o">=</span> <span class="p">(</span><span class="n">logit_scale</span> <span class="o">*</span> <span class="n">chunk_text_feat</span> <span class="o">@</span> <span class="n">chunk_img_feats</span><span class="o">.</span><span class="n">t</span><span class="p">())</span> <span class="o">/</span> <span class="mf">100.0</span>
+
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">reduce_mode</span> <span class="o">==</span> <span class="s2">&quot;avg&quot;</span><span class="p">:</span>
+                    <span class="n">sim</span> <span class="o">=</span> <span class="n">chunk_logits</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">reduce_mode</span> <span class="o">==</span> <span class="s2">&quot;max&quot;</span><span class="p">:</span>
+                    <span class="n">sim</span> <span class="o">=</span> <span class="n">chunk_logits</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">sim</span> <span class="o">=</span> <span class="n">chunk_logits</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
+                <span class="n">chunk_similarities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">sim</span><span class="p">))</span>
+
+        <span class="c1"># Scatter results back to samples</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_samples</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">sample_chunk_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">similarity</span> <span class="o">=</span> <span class="p">[</span><span class="n">chunk_similarities</span><span class="p">[</span><span class="n">ci</span><span class="p">]</span> <span class="k">for</span> <span class="n">ci</span> <span class="ow">in</span> <span class="n">sample_chunk_map</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span>
+            <span class="n">samples</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">stats</span><span class="p">][</span><span class="n">i</span><span class="p">][</span><span class="n">StatsKeys</span><span class="o">.</span><span class="n">image_text_similarity</span><span class="p">]</span> <span class="o">=</span> <span class="n">similarity</span>
+
+        <span class="k">return</span> <span class="n">samples</span></div>
 
 
 <div class="viewcode-block" id="ImageTextSimilarityFilter.process_single">
