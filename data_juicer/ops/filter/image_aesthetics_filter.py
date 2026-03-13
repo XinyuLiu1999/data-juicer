@@ -107,6 +107,61 @@ class ImageAestheticsFilter(Filter):
         sample[Fields.stats][StatsKeys.image_aesthetics_scores] = aesthetics_scores
         return sample
 
+    def compute_stats_batched(self, samples, rank=None, context=False):
+        # Collect all images across the batch for a single GPU forward pass
+        num_samples = len(samples[Fields.stats])
+        all_images = []  # flat list of PIL images for batched inference
+        image_counts = []  # number of images per sample
+
+        keys = samples.keys()
+        for i in range(num_samples):
+            # skip if already computed
+            if StatsKeys.image_aesthetics_scores in samples[Fields.stats][i]:
+                image_counts.append(-1)
+                continue
+
+            # no image in this sample
+            if self.image_key not in samples or not samples[self.image_key][i]:
+                samples[Fields.stats][i][StatsKeys.image_aesthetics_scores] = np.array([], dtype=np.float64)
+                image_counts.append(-1)
+                continue
+
+            # load images for this sample
+            this_sample = {key: samples[key][i] for key in keys}
+            loaded_image_keys = this_sample[self.image_key]
+            this_sample, images = load_data_with_context(
+                this_sample, context, loaded_image_keys, load_image, mm_bytes_key=self.image_bytes_key
+            )
+            if context:
+                samples[Fields.context][i] = this_sample[Fields.context]
+
+            img_list = list(images.values())
+            image_counts.append(len(img_list))
+            all_images.extend(img_list)
+
+        # Batched GPU inference for all images at once
+        if all_images:
+            model, processor = get_model(self.model_key, rank, self.use_cuda())
+            inputs = processor(images=all_images, return_tensors="pt").to(model.device)
+            with torch.no_grad():
+                outputs = model(**inputs)
+            if self.need_normalized_by_ten:
+                all_scores = (outputs.logits / 10.0).squeeze(-1)
+            else:
+                all_scores = outputs.logits.squeeze(-1)
+
+            # Scatter scores back to samples
+            offset = 0
+            for i in range(num_samples):
+                if image_counts[i] == -1:
+                    continue
+                count = image_counts[i]
+                scores = [all_scores[offset + j].item() for j in range(count)]
+                samples[Fields.stats][i][StatsKeys.image_aesthetics_scores] = scores
+                offset += count
+
+        return samples
+
     def process_single(self, sample):
         aesthetics_scores = (sample)[Fields.stats][StatsKeys.image_aesthetics_scores]
         if len(aesthetics_scores) <= 0:

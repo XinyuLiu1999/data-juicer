@@ -2,6 +2,7 @@ import numpy as np
 from PIL import ImageOps
 
 from data_juicer.utils.constant import Fields, StatsKeys
+from data_juicer.utils.lazy_loader import LazyLoader
 from data_juicer.utils.mm_utils import (
     SpecialTokens,
     load_data_with_context,
@@ -11,6 +12,8 @@ from data_juicer.utils.mm_utils import (
 from data_juicer.utils.model_utils import get_model, prepare_model
 
 from ..base_op import OPERATORS, Filter
+
+torch = LazyLoader("torch")
 
 OP_NAME = "image_text_similarity_filter"
 
@@ -145,6 +148,122 @@ class ImageTextSimilarityFilter(Filter):
         sample[Fields.stats][StatsKeys.image_text_similarity] = similarity
 
         return sample
+
+    def compute_stats_batched(self, samples, rank=None, context=False):
+        num_samples = len(samples[Fields.stats])
+        keys = samples.keys()
+
+        # Collect all (text, images) chunks across all samples
+        # Each chunk becomes one CLIP forward pass unit
+        chunk_texts = []      # text string per chunk
+        chunk_images = []     # list of PIL images per chunk
+        # Map: sample_idx -> list of chunk indices
+        sample_chunk_map = []
+
+        for i in range(num_samples):
+            if StatsKeys.image_text_similarity in samples[Fields.stats][i]:
+                sample_chunk_map.append(None)
+                continue
+
+            if self.image_key not in samples or not samples[self.image_key][i]:
+                samples[Fields.stats][i][StatsKeys.image_text_similarity] = np.array([], dtype=np.float64)
+                sample_chunk_map.append(None)
+                continue
+
+            this_sample = {key: samples[key][i] for key in keys}
+            loaded_image_keys = this_sample[self.image_key]
+            this_sample, images = load_data_with_context(
+                this_sample, context, loaded_image_keys, load_image, mm_bytes_key=self.image_bytes_key
+            )
+            if context:
+                samples[Fields.context][i] = this_sample[Fields.context]
+
+            text = this_sample[self.text_key]
+            offset = 0
+            chunk_indices = []
+
+            for chunk in text.split(SpecialTokens.eoc):
+                count = chunk.count(SpecialTokens.image)
+                if count == 0 or len(chunk) == 0:
+                    continue
+
+                text_chunk = remove_special_tokens(chunk)
+                image_chunk = []
+                for image_key in loaded_image_keys[offset:offset + count]:
+                    image = images[image_key]
+                    if self.horizontal_flip:
+                        image = ImageOps.mirror(image)
+                    if self.vertical_flip:
+                        image = ImageOps.flip(image)
+                    image_chunk.append(image)
+
+                chunk_indices.append(len(chunk_texts))
+                chunk_texts.append(text_chunk)
+                chunk_images.append(image_chunk)
+                offset += count
+
+            sample_chunk_map.append(chunk_indices)
+
+        # Batched inference: process all chunks at once using separate
+        # image/text encoding for efficiency
+        chunk_similarities = []
+        if chunk_texts:
+            model, processor = get_model(self.model_key, rank, self.use_cuda())
+
+            # Collect all images flat for batched image encoding
+            all_images_flat = []
+            image_offsets = []  # (start, count) per chunk
+            for img_list in chunk_images:
+                image_offsets.append((len(all_images_flat), len(img_list)))
+                all_images_flat.extend(img_list)
+
+            # Batched image encoding
+            image_inputs = processor(
+                images=all_images_flat,
+                return_tensors="pt",
+            ).to(model.device)
+            with torch.no_grad():
+                image_features = model.get_image_features(**image_inputs)
+                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+
+            # Batched text encoding
+            text_inputs = processor(
+                text=chunk_texts,
+                return_tensors="pt",
+                truncation=True,
+                max_length=model.config.text_config.max_position_embeddings,
+                padding=True,
+            ).to(model.device)
+            with torch.no_grad():
+                text_features = model.get_text_features(**text_inputs)
+                text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+
+            # Compute per-chunk similarity
+            logit_scale = model.logit_scale.exp()
+            for chunk_idx in range(len(chunk_texts)):
+                start, count = image_offsets[chunk_idx]
+                chunk_img_feats = image_features[start:start + count]
+                chunk_text_feat = text_features[chunk_idx:chunk_idx + 1]
+
+                # logits_per_text shape: [1, count]
+                chunk_logits = (logit_scale * chunk_text_feat @ chunk_img_feats.t()) / 100.0
+
+                if self.reduce_mode == "avg":
+                    sim = chunk_logits.mean()
+                elif self.reduce_mode == "max":
+                    sim = chunk_logits.max()
+                else:
+                    sim = chunk_logits.min()
+                chunk_similarities.append(float(sim))
+
+        # Scatter results back to samples
+        for i in range(num_samples):
+            if sample_chunk_map[i] is None:
+                continue
+            similarity = [chunk_similarities[ci] for ci in sample_chunk_map[i]]
+            samples[Fields.stats][i][StatsKeys.image_text_similarity] = similarity
+
+        return samples
 
     def process_single(self, sample, rank=None):
         similarity = sample[Fields.stats][StatsKeys.image_text_similarity]

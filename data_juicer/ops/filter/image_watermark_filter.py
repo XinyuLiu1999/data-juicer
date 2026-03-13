@@ -123,6 +123,62 @@ class ImageWatermarkFilter(Filter):
 
         return sample
 
+    def compute_stats_batched(self, samples, rank=None, context=False):
+        num_samples = len(samples[Fields.stats])
+        all_images = []
+        image_counts = []
+        keys = samples.keys()
+
+        for i in range(num_samples):
+            if StatsKeys.image_watermark_prob in samples[Fields.stats][i]:
+                image_counts.append(-1)
+                continue
+
+            if self.image_key not in samples or not samples[self.image_key][i]:
+                samples[Fields.stats][i][StatsKeys.image_watermark_prob] = np.array([], dtype=np.float64)
+                image_counts.append(-1)
+                continue
+
+            this_sample = {key: samples[key][i] for key in keys}
+            loaded_image_keys = this_sample[self.image_key]
+            this_sample, images = load_data_with_context(
+                this_sample, context, loaded_image_keys, load_image, mm_bytes_key=self.image_bytes_key
+            )
+            if context:
+                samples[Fields.context][i] = this_sample[Fields.context]
+
+            img_list = [images[key] for key in images]
+            image_counts.append(len(img_list))
+            all_images.extend(img_list)
+
+        if all_images:
+            model, processor = get_model(self.model_key, rank, self.use_cuda())
+
+            if self.watermark_model_type == "laion":
+                device = next(model.parameters()).device
+                batch = torch.stack([processor(img.convert("RGB")) for img in all_images]).to(device)
+                with torch.no_grad():
+                    logits = model(batch)
+                all_probs = torch.softmax(logits, dim=-1)
+                prob_idx = 0  # softmax[0] = watermark for LAION
+            else:
+                inputs = processor(images=all_images, return_tensors="pt").to(model.device)
+                with torch.no_grad():
+                    outputs = model(**inputs)
+                all_probs = torch.softmax(outputs.logits, dim=-1)
+                prob_idx = 1  # softmax[1] = watermark for HuggingFace
+
+            offset = 0
+            for i in range(num_samples):
+                if image_counts[i] == -1:
+                    continue
+                count = image_counts[i]
+                probs = [float(all_probs[offset + j][prob_idx]) for j in range(count)]
+                samples[Fields.stats][i][StatsKeys.image_watermark_prob] = probs
+                offset += count
+
+        return samples
+
     def process_single(self, sample, rank=None):
         itm_probs = sample[Fields.stats][StatsKeys.image_watermark_prob]
         if len(itm_probs) <= 0:

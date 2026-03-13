@@ -135,6 +135,64 @@ class ImageSafeAigcFilter(Filter):
 
         return sample
 
+    def compute_stats_batched(self, samples, rank=None, context=False):
+        num_samples = len(samples[Fields.stats])
+        all_images = []
+        image_counts = []
+        keys = samples.keys()
+
+        for i in range(num_samples):
+            if StatsKeys.image_aigc_score in samples[Fields.stats][i]:
+                image_counts.append(-1)
+                continue
+
+            if self.image_key not in samples or not samples[self.image_key][i]:
+                samples[Fields.stats][i][StatsKeys.image_aigc_score] = np.array([], dtype=np.float64)
+                image_counts.append(-1)
+                continue
+
+            this_sample = {key: samples[key][i] for key in keys}
+            loaded_image_keys = this_sample[self.image_key]
+            this_sample, images = load_data_with_context(
+                this_sample, context, loaded_image_keys, load_image, mm_bytes_key=self.image_bytes_key
+            )
+            if context:
+                samples[Fields.context][i] = this_sample[Fields.context]
+
+            img_list = []
+            for key in loaded_image_keys:
+                image = images[key]
+                if image.mode != "RGB":
+                    image = image.convert("RGB")
+                img_list.append(image)
+            image_counts.append(len(img_list))
+            all_images.extend(img_list)
+
+        if all_images:
+            model, transform = get_model(self.model_key, rank, self.use_cuda())
+            device = next(model.parameters()).device
+
+            batch = torch.stack([transform(img) for img in all_images]).to(device)
+            with torch.no_grad():
+                outputs = model(batch)
+
+            # Compute scores based on output shape
+            if outputs.dim() == 1 or (outputs.dim() == 2 and outputs.shape[1] == 1):
+                all_scores = torch.sigmoid(outputs).squeeze(-1)
+            else:
+                all_scores = torch.softmax(outputs, dim=-1)[:, 1]
+
+            offset = 0
+            for i in range(num_samples):
+                if image_counts[i] == -1:
+                    continue
+                count = image_counts[i]
+                scores = [float(all_scores[offset + j]) for j in range(count)]
+                samples[Fields.stats][i][StatsKeys.image_aigc_score] = scores
+                offset += count
+
+        return samples
+
     def process_single(self, sample, rank=None):
         aigc_scores = sample[Fields.stats][StatsKeys.image_aigc_score]
         if len(aigc_scores) <= 0:
