@@ -101,6 +101,8 @@ class RayBasicDeduplicator(Filter):
     it is implemented as Filter sub-class.
     """
 
+    _batched_op = True
+
     # TODO: Set a more reasonable value
     EMPTY_HASH_VALUE = "EMPTY"
 
@@ -144,5 +146,44 @@ class RayBasicDeduplicator(Filter):
         sample[HashKeys.is_unique] = self.backend.is_unique(md5_value)
         return sample
 
+    def compute_stats_batched(self, samples, context=False):
+        keys = list(samples.keys())
+        num_samples = len(samples[keys[0]])
+
+        # Phase 1: calculate hashes for all samples in the batch
+        hash_values = []
+        for i in range(num_samples):
+            this_sample = {key: samples[key][i] for key in keys}
+            hash_values.append(self.calculate_hash(this_sample, context))
+
+        # Phase 2: batch the uniqueness checks
+        if isinstance(self.backend, ActorBackend):
+            self.backend._ensure_actors()
+            futures = []
+            for hash_val in hash_values:
+                dedup_set_id = (
+                    int.from_bytes(
+                        hash_val.encode(), byteorder="little"
+                    )
+                    % MERSENNE_PRIME
+                    % self.backend.dedup_set_num
+                )
+                futures.append(
+                    self.backend._dedup_sets[dedup_set_id]
+                    .is_unique.remote(hash_val)
+                )
+            results = ray.get(futures)
+        else:
+            results = [
+                self.backend.is_unique(hv) for hv in hash_values
+            ]
+
+        # Phase 3: store results
+        samples[HashKeys.is_unique] = results
+        return samples
+
     def process_single(self, sample):
         return sample[HashKeys.is_unique]
+
+    def process_batched(self, samples):
+        return samples[HashKeys.is_unique]
