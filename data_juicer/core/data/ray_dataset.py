@@ -53,13 +53,14 @@ def convert_to_absolute_paths(samples: pyarrow.Table, dataset_dir, path_keys):
 
 
 # TODO: check path for nestdataset
-def set_dataset_to_absolute_path(dataset, dataset_path, cfg):
+def set_dataset_to_absolute_path(dataset, dataset_path, cfg, columns=None):
     """
     Set all the path in input data to absolute path.
     Checks dataset_dir and project_dir for valid paths.
     """
     path_keys = []
-    columns = dataset.columns()
+    if columns is None:
+        columns = dataset.columns()
     for key in [
         cfg.get("video_key", "videos"),
         cfg.get("image_key", "images"),
@@ -193,13 +194,24 @@ def preprocess_laioncoco_ray(table: pyarrow.Table, image_special_token: str) -> 
     return out_table
 
 
-def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg) -> ray.data.Dataset:
+def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg):
+    """Preprocess dataset and return (dataset, cached_columns).
+
+    Returns the columns set so callers can avoid extra .columns() calls
+    on the lazy dataset, which can trigger Ray Data internal queue
+    assertion errors.
+    """
+    # Get columns once on the raw dataset before chaining lazy ops
+    columns = set(dataset.columns())
+
     if dataset_path:
-        dataset = set_dataset_to_absolute_path(dataset, dataset_path, cfg)
+        dataset = set_dataset_to_absolute_path(
+            dataset, dataset_path, cfg, columns=columns
+        )
 
     if cfg and getattr(cfg, "laioncoco_preprocessing", False):
         # Skip if preprocessing was already applied (clean_content removed)
-        if "clean_content" in dataset.columns():
+        if "clean_content" in columns:
             from data_juicer.utils.mm_utils import SpecialTokens
 
             preprocessing_num_cpus = getattr(
@@ -221,10 +233,14 @@ def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg) -> ray.data
                 batch_size=preprocessing_batch_size,
                 num_cpus=preprocessing_num_cpus,
             )
+            # Update columns to reflect laioncoco preprocessing changes
+            columns.discard("clean_content")
+            columns.discard("image_buffer_list")
+            columns.update(["text", "images", "image_bytes"])
         else:
             logger.info("LAION-COCO preprocessing already applied, skipping.")
 
-    return dataset
+    return dataset, columns
 
 
 def filter_batch(batch, filter_func):
@@ -240,7 +256,9 @@ class RayDataset(DJDataset):
         cfg: Optional[Namespace] = None,
         auto_op_parallelism=True,
     ) -> None:
-        self.data = preprocess_dataset(dataset, dataset_path, cfg)
+        self.data, self._cached_columns = preprocess_dataset(
+            dataset, dataset_path, cfg
+        )
 
         # if auto_op_parallelism is set in both args and cfg, cfg takes precedence
         if cfg and cfg.get("auto_op_parallelism") is not None:
@@ -254,7 +272,7 @@ class RayDataset(DJDataset):
         Returns:
             Schema: Dataset schema containing column names and types
         """
-        if self.data is None or self.data.columns() is None:
+        if self.data is None or not self._cached_columns:
             raise ValueError("Dataset is empty or not initialized")
 
         return Schema.from_ray_schema(self.data.schema())
@@ -284,7 +302,7 @@ class RayDataset(DJDataset):
             KeyError: If column doesn't exist
             ValueError: If k is negative
         """
-        if self.data is None or self.data.columns() is None or column not in self.data.columns():
+        if self.data is None or column not in self._cached_columns:
             raise KeyError(f"Column '{column}' not found in dataset")
 
         if k is not None:
@@ -308,17 +326,10 @@ class RayDataset(DJDataset):
         if self._auto_proc:
             calculate_ray_np(operators)
 
-        # Use schema_hint or take() to check emptiness and get columns
-        # without forcing full materialization. columns() uses limit(1)
-        # which is acceptable (only reads one batch), but .count() would
-        # materialize the entire dataset and must be avoided.
-        columns_result = self.data.columns()
-        if columns_result is None:
-            from loguru import logger
-
-            logger.warning("Dataset has unknown schema (likely empty), skipping operator processing")
-            return self
-        cached_columns = set(columns_result)
+        # Use cached columns from initialization to avoid calling
+        # self.data.columns() which can trigger Ray Data internal queue
+        # assertion errors on datasets with pending lazy operations.
+        cached_columns = set(self._cached_columns)
 
         for op in operators:
             try:
@@ -340,7 +351,7 @@ class RayDataset(DJDataset):
     def _run_single_op(self, op, cached_columns=None, tracer=None):
         # Use cached columns to avoid calling self.data.columns() which breaks pipeline
         if cached_columns is None:
-            cached_columns = set(self.data.columns())
+            cached_columns = set(self._cached_columns)
 
         if op._name in TAGGING_OPS.modules and Fields.meta not in cached_columns:
 
