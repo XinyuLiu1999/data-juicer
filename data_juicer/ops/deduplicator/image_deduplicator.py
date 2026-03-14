@@ -1,3 +1,4 @@
+import hashlib
 from collections import defaultdict
 from typing import Dict, Set, Tuple
 
@@ -14,7 +15,7 @@ imgdedup_methods = LazyLoader("imagededup.methods")
 
 OP_NAME = "image_deduplicator"
 
-HASH_METHOD = {"phash", "dhash", "whash", "ahash"}
+HASH_METHOD = {"phash", "dhash", "whash", "ahash", "md5"}
 
 
 def get_hash_method(method_name):
@@ -57,7 +58,8 @@ class ImageDeduplicator(Deduplicator):
         super().__init__(*args, **kwargs)
         if method not in HASH_METHOD:
             raise ValueError(f"Keep strategy [{method}] is not supported. " f"Can only be one of {HASH_METHOD}.")
-        self.hasher = get_hash_method(method)()
+        self.method = method
+        self.hasher = None if method == "md5" else get_hash_method(method)()
         self.consider_text = consider_text
         self.text_dedup_op = None
         if self.consider_text:
@@ -76,16 +78,39 @@ class ImageDeduplicator(Deduplicator):
         if self.image_key not in sample or not sample[self.image_key]:
             return sample
 
-        # load images
         loaded_image_keys = sample[self.image_key]
+
+        if self.method == "md5":
+            sample[HashKeys.imagehash] = self._calculate_md5(
+                sample, loaded_image_keys)
+            return sample
+
+        # perceptual hash path
         sample, images = load_data_with_context(
             sample, context, loaded_image_keys, load_image, mm_bytes_key=self.image_bytes_key
         )
-
-        # compute hash
         for key in images:
             sample[HashKeys.imagehash] += self.hasher.encode_image(image_array=np.array(images[key]))
         return sample
+
+    def _calculate_md5(self, sample, loaded_image_keys):
+        """Compute MD5 hash from raw image bytes for byte-exact dedup."""
+        from data_juicer.utils.mm_utils import (
+            load_file_byte,
+            load_mm_bytes_from_sample,
+        )
+
+        md5 = hashlib.md5()
+        for idx, key in enumerate(loaded_image_keys):
+            bytes_data = load_mm_bytes_from_sample(
+                sample, idx, mm_bytes_key=self.image_bytes_key)
+            if bytes_data is not None:
+                md5.update(bytes_data)
+            elif isinstance(key, bytes):
+                md5.update(key)
+            else:
+                md5.update(load_file_byte(key))
+        return md5.hexdigest()
 
     def process(self, dataset, show_num=0):
         """

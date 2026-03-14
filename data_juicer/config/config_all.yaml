@@ -1046,7 +1046,7 @@ process:
       lowercase: true                                         # whether to convert text to lower case
       ignore_pattern: null                                    # whether to ignore sub-strings with specific pattern when computing simhash.
   - image_deduplicator:                                     # deduplicator to deduplicate samples at document-level using exact matching of images between documents.
-      method: phash                                           # hash method for image. One of [phash, dhash, whash, ahash]
+      method: phash                                           # hash method for image. One of [phash, dhash, whash, ahash, md5]
       consider_text: false                                    # whether to consider text hash together with image hash when applying deduplication.
   - video_deduplicator:                                     # deduplicator to deduplicate samples at document-level using exact matching of videos between documents.
       consider_text: false                                    # whether to consider text hash together with video hash when applying deduplication.
