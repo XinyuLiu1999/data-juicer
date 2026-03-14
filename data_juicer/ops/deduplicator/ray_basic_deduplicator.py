@@ -155,11 +155,13 @@ class RayBasicDeduplicator(Filter):
         # Use ThreadPoolExecutor to parallelize image loading and hash
         # computation within each batch. PIL image decode and numpy
         # operations release the GIL, so threads provide real speedup.
+        # Keep thread count low (4) to limit peak memory: each thread
+        # holds PIL image + numpy array (~5-15MB) simultaneously.
         def _compute_hash(i):
             this_sample = {key: samples[key][i] for key in keys}
             return self.calculate_hash(this_sample, context)
 
-        num_workers = min(num_samples, 8)
+        num_workers = min(num_samples, 4)
         if num_workers > 1:
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
                 hash_values = list(executor.map(
