@@ -657,6 +657,8 @@
 <span class="sd">    it is implemented as Filter sub-class.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
+    <span class="n">_batched_op</span> <span class="o">=</span> <span class="kc">True</span>
+
     <span class="c1"># TODO: Set a more reasonable value</span>
     <span class="n">EMPTY_HASH_VALUE</span> <span class="o">=</span> <span class="s2">&quot;EMPTY&quot;</span>
 
@@ -709,10 +711,55 @@
         <span class="k">return</span> <span class="n">sample</span></div>
 
 
+<div class="viewcode-block" id="RayBasicDeduplicator.compute_stats_batched">
+<a class="viewcode-back" href="../../../../api/data_juicer.ops.deduplicator.ray_basic_deduplicator.html#data_juicer.ops.deduplicator.RayBasicDeduplicator.compute_stats_batched">[文档]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_stats_batched</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">samples</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">samples</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="n">num_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">samples</span><span class="p">[</span><span class="n">keys</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span>
+
+        <span class="c1"># Phase 1: calculate hashes for all samples in the batch</span>
+        <span class="n">hash_values</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_samples</span><span class="p">):</span>
+            <span class="n">this_sample</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">samples</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">}</span>
+            <span class="n">hash_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">calculate_hash</span><span class="p">(</span><span class="n">this_sample</span><span class="p">,</span> <span class="n">context</span><span class="p">))</span>
+
+        <span class="c1"># Phase 2: batch the uniqueness checks</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="p">,</span> <span class="n">ActorBackend</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">_ensure_actors</span><span class="p">()</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">hash_val</span> <span class="ow">in</span> <span class="n">hash_values</span><span class="p">:</span>
+                <span class="n">dedup_set_id</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="nb">int</span><span class="o">.</span><span class="n">from_bytes</span><span class="p">(</span>
+                        <span class="n">hash_val</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span> <span class="n">byteorder</span><span class="o">=</span><span class="s2">&quot;little&quot;</span>
+                    <span class="p">)</span>
+                    <span class="o">%</span> <span class="n">MERSENNE_PRIME</span>
+                    <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">dedup_set_num</span>
+                <span class="p">)</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">_dedup_sets</span><span class="p">[</span><span class="n">dedup_set_id</span><span class="p">]</span>
+                    <span class="o">.</span><span class="n">is_unique</span><span class="o">.</span><span class="n">remote</span><span class="p">(</span><span class="n">hash_val</span><span class="p">)</span>
+                <span class="p">)</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">ray</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">futures</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">is_unique</span><span class="p">(</span><span class="n">hv</span><span class="p">)</span> <span class="k">for</span> <span class="n">hv</span> <span class="ow">in</span> <span class="n">hash_values</span>
+            <span class="p">]</span>
+
+        <span class="c1"># Phase 3: store results</span>
+        <span class="n">samples</span><span class="p">[</span><span class="n">HashKeys</span><span class="o">.</span><span class="n">is_unique</span><span class="p">]</span> <span class="o">=</span> <span class="n">results</span>
+        <span class="k">return</span> <span class="n">samples</span></div>
+
+
 <div class="viewcode-block" id="RayBasicDeduplicator.process_single">
 <a class="viewcode-back" href="../../../../api/data_juicer.ops.deduplicator.ray_basic_deduplicator.html#data_juicer.ops.deduplicator.RayBasicDeduplicator.process_single">[文档]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">process_single</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sample</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">sample</span><span class="p">[</span><span class="n">HashKeys</span><span class="o">.</span><span class="n">is_unique</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="RayBasicDeduplicator.process_batched">
+<a class="viewcode-back" href="../../../../api/data_juicer.ops.deduplicator.ray_basic_deduplicator.html#data_juicer.ops.deduplicator.RayBasicDeduplicator.process_batched">[文档]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_batched</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">samples</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">samples</span><span class="p">[</span><span class="n">HashKeys</span><span class="o">.</span><span class="n">is_unique</span><span class="p">]</span></div>
 </div>
 
 </pre></div>

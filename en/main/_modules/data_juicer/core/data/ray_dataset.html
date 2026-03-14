@@ -575,13 +575,14 @@
 <span class="c1"># TODO: check path for nestdataset</span>
 <div class="viewcode-block" id="set_dataset_to_absolute_path">
 <a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.set_dataset_to_absolute_path">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">set_dataset_to_absolute_path</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">dataset_path</span><span class="p">,</span> <span class="n">cfg</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">set_dataset_to_absolute_path</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">dataset_path</span><span class="p">,</span> <span class="n">cfg</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Set all the path in input data to absolute path.</span>
 <span class="sd">    Checks dataset_dir and project_dir for valid paths.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">path_keys</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="n">columns</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">columns</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">columns</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">columns</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">columns</span><span class="p">()</span>
     <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">[</span>
         <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;video_key&quot;</span><span class="p">,</span> <span class="s2">&quot;videos&quot;</span><span class="p">),</span>
         <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;image_key&quot;</span><span class="p">,</span> <span class="s2">&quot;images&quot;</span><span class="p">),</span>
@@ -721,13 +722,24 @@
 
 <div class="viewcode-block" id="preprocess_dataset">
 <a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.preprocess_dataset">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">preprocess_dataset</span><span class="p">(</span><span class="n">dataset</span><span class="p">:</span> <span class="n">ray</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Dataset</span><span class="p">,</span> <span class="n">dataset_path</span><span class="p">,</span> <span class="n">cfg</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ray</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Dataset</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">preprocess_dataset</span><span class="p">(</span><span class="n">dataset</span><span class="p">:</span> <span class="n">ray</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Dataset</span><span class="p">,</span> <span class="n">dataset_path</span><span class="p">,</span> <span class="n">cfg</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Preprocess dataset and return (dataset, cached_columns).</span>
+
+<span class="sd">    Returns the columns set so callers can avoid extra .columns() calls</span>
+<span class="sd">    on the lazy dataset, which can trigger Ray Data internal queue</span>
+<span class="sd">    assertion errors.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Get columns once on the raw dataset before chaining lazy ops</span>
+    <span class="n">columns</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">columns</span><span class="p">())</span>
+
     <span class="k">if</span> <span class="n">dataset_path</span><span class="p">:</span>
-        <span class="n">dataset</span> <span class="o">=</span> <span class="n">set_dataset_to_absolute_path</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">dataset_path</span><span class="p">,</span> <span class="n">cfg</span><span class="p">)</span>
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">set_dataset_to_absolute_path</span><span class="p">(</span>
+            <span class="n">dataset</span><span class="p">,</span> <span class="n">dataset_path</span><span class="p">,</span> <span class="n">cfg</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">columns</span>
+        <span class="p">)</span>
 
     <span class="k">if</span> <span class="n">cfg</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;laioncoco_preprocessing&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
         <span class="c1"># Skip if preprocessing was already applied (clean_content removed)</span>
-        <span class="k">if</span> <span class="s2">&quot;clean_content&quot;</span> <span class="ow">in</span> <span class="n">dataset</span><span class="o">.</span><span class="n">columns</span><span class="p">():</span>
+        <span class="k">if</span> <span class="s2">&quot;clean_content&quot;</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">:</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.mm_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpecialTokens</span>
 
             <span class="n">preprocessing_num_cpus</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
@@ -749,10 +761,14 @@
                 <span class="n">batch_size</span><span class="o">=</span><span class="n">preprocessing_batch_size</span><span class="p">,</span>
                 <span class="n">num_cpus</span><span class="o">=</span><span class="n">preprocessing_num_cpus</span><span class="p">,</span>
             <span class="p">)</span>
+            <span class="c1"># Update columns to reflect laioncoco preprocessing changes</span>
+            <span class="n">columns</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="s2">&quot;clean_content&quot;</span><span class="p">)</span>
+            <span class="n">columns</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="s2">&quot;image_buffer_list&quot;</span><span class="p">)</span>
+            <span class="n">columns</span><span class="o">.</span><span class="n">update</span><span class="p">([</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="s2">&quot;image_bytes&quot;</span><span class="p">])</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;LAION-COCO preprocessing already applied, skipping.&quot;</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="n">dataset</span></div>
+    <span class="k">return</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">columns</span></div>
 
 
 
@@ -776,7 +792,9 @@
         <span class="n">cfg</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Namespace</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">auto_op_parallelism</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">preprocess_dataset</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">dataset_path</span><span class="p">,</span> <span class="n">cfg</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cached_columns</span> <span class="o">=</span> <span class="n">preprocess_dataset</span><span class="p">(</span>
+            <span class="n">dataset</span><span class="p">,</span> <span class="n">dataset_path</span><span class="p">,</span> <span class="n">cfg</span>
+        <span class="p">)</span>
 
         <span class="c1"># if auto_op_parallelism is set in both args and cfg, cfg takes precedence</span>
         <span class="k">if</span> <span class="n">cfg</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;auto_op_parallelism&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -793,7 +811,7 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            Schema: Dataset schema containing column names and types</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cached_columns</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Dataset is empty or not initialized&quot;</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">Schema</span><span class="o">.</span><span class="n">from_ray_schema</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">schema</span><span class="p">())</span></div>
@@ -829,7 +847,7 @@
 <span class="sd">            KeyError: If column doesn&#39;t exist</span>
 <span class="sd">            ValueError: If k is negative</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">column</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">():</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">column</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cached_columns</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Column &#39;</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">&#39; not found in dataset&quot;</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">k</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -856,17 +874,10 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auto_proc</span><span class="p">:</span>
             <span class="n">calculate_ray_np</span><span class="p">(</span><span class="n">operators</span><span class="p">)</span>
 
-        <span class="c1"># Use schema_hint or take() to check emptiness and get columns</span>
-        <span class="c1"># without forcing full materialization. columns() uses limit(1)</span>
-        <span class="c1"># which is acceptable (only reads one batch), but .count() would</span>
-        <span class="c1"># materialize the entire dataset and must be avoided.</span>
-        <span class="n">columns_result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">()</span>
-        <span class="k">if</span> <span class="n">columns_result</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">loguru</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span>
-
-            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Dataset has unknown schema (likely empty), skipping operator processing&quot;</span><span class="p">)</span>
-            <span class="k">return</span> <span class="bp">self</span>
-        <span class="n">cached_columns</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">columns_result</span><span class="p">)</span>
+        <span class="c1"># Use cached columns from initialization to avoid calling</span>
+        <span class="c1"># self.data.columns() which can trigger Ray Data internal queue</span>
+        <span class="c1"># assertion errors on datasets with pending lazy operations.</span>
+        <span class="n">cached_columns</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cached_columns</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">operators</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
@@ -889,7 +900,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_run_single_op</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">cached_columns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">tracer</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="c1"># Use cached columns to avoid calling self.data.columns() which breaks pipeline</span>
         <span class="k">if</span> <span class="n">cached_columns</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">cached_columns</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">())</span>
+            <span class="n">cached_columns</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cached_columns</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">op</span><span class="o">.</span><span class="n">_name</span> <span class="ow">in</span> <span class="n">TAGGING_OPS</span><span class="o">.</span><span class="n">modules</span> <span class="ow">and</span> <span class="n">Fields</span><span class="o">.</span><span class="n">meta</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">cached_columns</span><span class="p">:</span>
 
