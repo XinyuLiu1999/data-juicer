@@ -155,6 +155,7 @@ class RayBasicDeduplicator(Filter):
     """
 
     _batched_op = True
+    _two_phase = True  # signals executor to split compute_hash / check_uniqueness
 
     # TODO: Set a more reasonable value
     EMPTY_HASH_VALUE = "EMPTY"
@@ -192,6 +193,31 @@ class RayBasicDeduplicator(Filter):
         """Calculate hash value for the sample."""
         raise NotImplementedError
 
+    def compute_hash_batched(self, samples, context=False):
+        """Phase 1: compute hashes only (no ray.get, fully parallel)."""
+        keys = list(samples.keys())
+        num_samples = len(samples[keys[0]])
+
+        hash_values = []
+        for i in range(num_samples):
+            this_sample = {key: samples[key][i] for key in keys}
+            hash_values.append(self.calculate_hash(this_sample, context))
+
+        samples[HashKeys.hash] = hash_values
+        return samples
+
+    def check_uniqueness_batched(self, samples):
+        """Phase 2: check uniqueness via actors (runs with low concurrency)."""
+        hash_values = samples[HashKeys.hash]
+
+        if isinstance(self.backend, ActorBackend):
+            results = self.backend.are_unique_batched(hash_values)
+        else:
+            results = [self.backend.is_unique(hv) for hv in hash_values]
+
+        samples[HashKeys.is_unique] = results
+        return samples
+
     def compute_stats_single(self, sample, context=False):
         # compute hash
         md5_value = self.calculate_hash(sample, context)
@@ -200,22 +226,9 @@ class RayBasicDeduplicator(Filter):
         return sample
 
     def compute_stats_batched(self, samples, context=False):
-        keys = list(samples.keys())
-        num_samples = len(samples[keys[0]])
-
-        # Phase 1: calculate hashes for all samples in the batch
-        hash_values = []
-        for i in range(num_samples):
-            this_sample = {key: samples[key][i] for key in keys}
-            hash_values.append(self.calculate_hash(this_sample, context))
-
-        # Phase 2: batch uniqueness checks
-        if isinstance(self.backend, ActorBackend):
-            results = self.backend.are_unique_batched(hash_values)
-        else:
-            results = [self.backend.is_unique(hv) for hv in hash_values]
-
-        samples[HashKeys.is_unique] = results
+        """Combined path (used when executor doesn't split phases)."""
+        samples = self.compute_hash_batched(samples, context)
+        samples = self.check_uniqueness_batched(samples)
         return samples
 
     def process_single(self, sample):

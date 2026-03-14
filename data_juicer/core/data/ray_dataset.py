@@ -418,7 +418,47 @@ class RayDataset(DJDataset):
                         process_batch_arrow, batch_format="pyarrow", batch_size=DEFAULT_BATCH_SIZE
                     )
                     cached_columns.add(Fields.stats)
-                if op.use_ray_actor():
+                if getattr(op, "_two_phase", False) and op.is_batched_op():
+                    # Two-phase deduplicator: split hash computation (parallel)
+                    # from uniqueness checking (low concurrency) to avoid
+                    # blocking ray.get() inside highly parallel map_batches.
+                    from data_juicer.ops.base_op import (
+                        catch_map_batches_exception,
+                    )
+
+                    # Phase 1: compute hashes (fully parallel, no ray.get)
+                    compute_hash_fn = catch_map_batches_exception(
+                        op.compute_hash_batched,
+                        skip_op_error=op.skip_op_error,
+                        op_name=op._name + "_compute_hash",
+                    )
+                    compute = get_compute_strategy(
+                        compute_hash_fn, concurrency=op.num_proc
+                    )
+                    self.data = self.data.map_batches(
+                        compute_hash_fn,
+                        batch_size=batch_size,
+                        batch_format="pyarrow",
+                        num_cpus=op.num_cpus,
+                        num_gpus=op.num_gpus,
+                        compute=compute,
+                        runtime_env=op.runtime_env,
+                    )
+
+                    # Phase 2: check uniqueness (low concurrency, has ray.get)
+                    check_uniq_fn = catch_map_batches_exception(
+                        op.check_uniqueness_batched,
+                        skip_op_error=op.skip_op_error,
+                        op_name=op._name + "_check_uniqueness",
+                    )
+                    self.data = self.data.map_batches(
+                        check_uniq_fn,
+                        batch_size=batch_size,
+                        batch_format="pyarrow",
+                        concurrency=1,
+                        runtime_env=op.runtime_env,
+                    )
+                elif op.use_ray_actor():
                     compute = get_compute_strategy(op.__class__, concurrency=op.num_proc)
                     self.data = self.data.map_batches(
                         op.__class__,
