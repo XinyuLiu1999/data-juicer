@@ -35,8 +35,10 @@ def _build_dct_matrix(n):
 
     Matches scipy.fftpack.dct type 2 (no normalization):
         DCT[k] = 2 * sum_{i} x[i] * cos(pi * k * (2*i + 1) / (2*N))
+
+    Uses float64 to match scipy's precision.
     """
-    mat = np.zeros((n, n), dtype=np.float32)
+    mat = np.zeros((n, n), dtype=np.float64)
     for k in range(n):
         for i in range(n):
             mat[k, i] = 2.0 * math.cos(math.pi * k * (2 * i + 1) / (2 * n))
@@ -50,12 +52,12 @@ _DCT_MATRIX_32 = _build_dct_matrix(32)
 def _gpu_batch_phash(pil_images, device):
     """Compute phash for a batch of PIL images on GPU.
 
-    Reproduces the imagededup PHash algorithm:
-    1. Resize to 32x32
-    2. Convert to grayscale
-    3. Apply 2D DCT
+    Reproduces the imagededup PHash algorithm exactly:
+    1. Resize to 32x32 (LANCZOS interpolation)
+    2. Convert to grayscale (PIL 'L' mode)
+    3. Apply 2D DCT (scipy-compatible, float64)
     4. Take top-left 8x8 low-frequency coefficients
-    5. Hash bits = (value > median)
+    5. Hash bits = (value >= median), excluding DC from median
     6. Pack into hex string
 
     Args:
@@ -69,20 +71,21 @@ def _gpu_batch_phash(pil_images, device):
 
     import PIL.Image
 
-    # CPU: convert to grayscale and resize to 32x32.
-    # Use PIL operations to match imagededup's load_image behavior.
+    # CPU: resize then convert to grayscale, matching imagededup's
+    # preprocess_image order: resize(LANCZOS) first, then convert('L').
     tensors = []
     for img in pil_images:
-        gray_img = img.convert("L").resize(
-            (32, 32), PIL.Image.BILINEAR)
+        resized = img.resize((32, 32), PIL.Image.LANCZOS)
+        gray_img = resized.convert("L")
+        # Use uint8->float64 to match scipy.fftpack.dct precision
         t = torch.from_numpy(
-            np.array(gray_img, dtype=np.float32))  # (32, 32)
+            np.array(gray_img, dtype=np.uint8).astype(np.float64))
         tensors.append(t)
 
-    gray = torch.stack(tensors).to(device)  # (B, 32, 32)
+    gray = torch.stack(tensors).to(device)  # (B, 32, 32) float64
 
     # 2D DCT via matrix multiplication: DCT = M @ X @ M^T
-    # Uses scipy-compatible DCT-II (no ortho normalization)
+    # Uses scipy-compatible DCT-II (no ortho normalization), float64
     dct_mat = torch.from_numpy(_DCT_MATRIX_32).to(device)
     dct_result = torch.matmul(torch.matmul(dct_mat, gray), dct_mat.t())
 
