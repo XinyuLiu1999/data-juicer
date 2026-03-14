@@ -1,19 +1,14 @@
 import hashlib
-import math
-from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
-from data_juicer.utils.constant import HashKeys
 from data_juicer.utils.lazy_loader import LazyLoader
 from data_juicer.utils.mm_utils import load_data_with_context, load_image
 
 from ..base_op import OPERATORS
-from .ray_basic_deduplicator import MERSENNE_PRIME, ActorBackend, RayBasicDeduplicator
+from .ray_basic_deduplicator import RayBasicDeduplicator
 
 imgdedup_methods = LazyLoader("imagededup.methods")
-ray = LazyLoader("ray")
-torch = LazyLoader("torch")
 
 OP_NAME = "ray_image_deduplicator"
 
@@ -31,80 +26,6 @@ def get_hash_method(method_name):
     return mapping[method_name]
 
 
-def _build_dct_matrix(n):
-    """Precompute the DCT-II basis matrix of size n x n.
-
-    Matches scipy.fftpack.dct type 2 (no normalization):
-        DCT[k] = 2 * sum_{i} x[i] * cos(pi * k * (2*i + 1) / (2*N))
-
-    Uses float64 to match scipy's precision.
-    """
-    mat = np.zeros((n, n), dtype=np.float64)
-    for k in range(n):
-        for i in range(n):
-            mat[k, i] = 2.0 * math.cos(math.pi * k * (2 * i + 1) / (2 * n))
-    return mat
-
-
-# Precompute once at module level (32x32 for phash with highfreq_factor=4)
-_DCT_MATRIX_32 = _build_dct_matrix(32)
-
-
-def _gpu_batch_phash(pil_images, device):
-    """Compute phash for a batch of PIL images on GPU.
-
-    Reproduces the imagededup PHash algorithm exactly:
-    1. Resize to 32x32 (LANCZOS interpolation)
-    2. Convert to grayscale (PIL 'L' mode)
-    3. Apply 2D DCT (scipy-compatible, float64)
-    4. Take top-left 8x8 low-frequency coefficients
-    5. Hash bits = (value >= median), excluding DC from median
-    6. Pack into hex string
-
-    Args:
-        pil_images: list of PIL.Image objects (RGB)
-        device: torch device string
-
-    Returns:
-        list of hex hash strings
-    """
-    import torch
-
-    import PIL.Image
-
-    # CPU: resize then convert to grayscale, matching imagededup's
-    # preprocess_image order: resize(LANCZOS) first, then convert('L').
-    tensors = []
-    for img in pil_images:
-        resized = img.resize((32, 32), PIL.Image.LANCZOS)
-        gray_img = resized.convert("L")
-        # Use uint8->float64 to match scipy.fftpack.dct precision
-        t = torch.from_numpy(
-            np.array(gray_img, dtype=np.uint8).astype(np.float64))
-        tensors.append(t)
-
-    gray = torch.stack(tensors).to(device)  # (B, 32, 32) float64
-
-    # 2D DCT via matrix multiplication: DCT = M @ X @ M^T
-    # Uses scipy-compatible DCT-II (no ortho normalization), float64
-    dct_mat = torch.from_numpy(_DCT_MATRIX_32).to(device)
-    dct_result = torch.matmul(torch.matmul(dct_mat, gray), dct_mat.t())
-
-    # Take top-left 8x8 low-frequency block
-    low_freq = dct_result[:, :8, :8].reshape(-1, 64)  # (B, 64)
-
-    # Median threshold per image, excluding DC term (index 0)
-    # to match imagededup: np.median(flatten(dct_reduced_coef)[1:])
-    medians = low_freq[:, 1:].median(dim=1, keepdim=True).values
-
-    # Use >= to match imagededup: hash_mat = dct_reduced_coef >= median
-    hash_bits = (low_freq >= medians).cpu().numpy().astype(np.uint8)  # (B, 64)
-
-    # Pack 64 bits into 8 bytes → 16-char hex string
-    hash_bytes = np.packbits(hash_bits, axis=1)  # (B, 8)
-    return [bytes(row).hex() for row in hash_bytes]
-
-
 @OPERATORS.register_module(OP_NAME)
 class RayImageDeduplicator(RayBasicDeduplicator):
     """Deduplicates samples at the document level using exact matching of images in Ray distributed mode.
@@ -116,8 +37,7 @@ class RayImageDeduplicator(RayBasicDeduplicator):
     contain an image, it is assigned an empty hash value. The operator loads images from the
     specified keys and computes their combined hash for comparison.
 
-    When accelerator='cuda' and method='phash', uses GPU-accelerated batch hashing
-    for significantly higher throughput on large datasets."""
+    Supports 'md5' for byte-exact deduplication in addition to perceptual hashes."""
 
     def __init__(
         self,
@@ -178,109 +98,3 @@ class RayImageDeduplicator(RayBasicDeduplicator):
             else:
                 md5.update(load_file_byte(key))
         return md5.hexdigest()
-
-    def compute_stats_batched(self, samples, rank=None, context=False):
-        """Compute hashes and check uniqueness for a batch of samples.
-
-        When running on GPU with method='phash', uses batched GPU hashing
-        for much higher throughput. Falls back to CPU otherwise.
-        """
-        keys = list(samples.keys())
-        num_samples = len(samples[keys[0]])
-
-        if self.use_cuda() and self.method == "phash":
-            hash_values = self._compute_hashes_gpu(
-                samples, keys, num_samples, rank, context)
-        else:
-            hash_values = self._compute_hashes_cpu(
-                samples, keys, num_samples, context)
-
-        # Batch uniqueness checks via Ray actors
-        if isinstance(self.backend, ActorBackend):
-            self.backend._ensure_actors()
-            futures = []
-            for hash_val in hash_values:
-                dedup_set_id = (
-                    int.from_bytes(
-                        hash_val.encode(), byteorder="little"
-                    )
-                    % MERSENNE_PRIME
-                    % self.backend.dedup_set_num
-                )
-                futures.append(
-                    self.backend._dedup_sets[dedup_set_id]
-                    .is_unique.remote(hash_val)
-                )
-            results = ray.get(futures)
-        else:
-            results = [self.backend.is_unique(hv) for hv in hash_values]
-
-        samples[HashKeys.is_unique] = results
-        return samples
-
-    def _compute_hashes_gpu(self, samples, keys, num_samples, rank, context):
-        """Collect all images, batch-hash on GPU, scatter results back."""
-        import torch as th
-
-        device_count = th.cuda.device_count()
-        device = f"cuda:{rank % device_count}" if rank is not None else "cuda:0"
-
-        # Phase 1: Collect all images from all samples (CPU, threaded)
-        all_images = []
-        image_counts = []  # number of images per sample, 0 = no images
-
-        def _load_sample_images(i):
-            this_sample = {key: samples[key][i] for key in keys}
-            if self.image_key not in this_sample or not this_sample[self.image_key]:
-                return []
-            loaded_image_keys = this_sample[self.image_key]
-            _, images = load_data_with_context(
-                this_sample, context, loaded_image_keys, load_image,
-                mm_bytes_key=self.image_bytes_key
-            )
-            return list(images.values())
-
-        num_workers = min(num_samples, 4)
-        if num_workers > 1:
-            with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                per_sample_images = list(executor.map(
-                    _load_sample_images, range(num_samples)))
-        else:
-            per_sample_images = [_load_sample_images(i)
-                                 for i in range(num_samples)]
-
-        for img_list in per_sample_images:
-            image_counts.append(len(img_list))
-            all_images.extend(img_list)
-
-        # Phase 2: Batch GPU phash
-        if all_images:
-            all_hashes = _gpu_batch_phash(all_images, device)
-        else:
-            all_hashes = []
-
-        # Phase 3: Scatter — combine per-image hashes into per-sample hash
-        hash_values = []
-        offset = 0
-        for count in image_counts:
-            if count == 0:
-                hash_values.append(RayBasicDeduplicator.EMPTY_HASH_VALUE)
-            else:
-                combined = "".join(all_hashes[offset:offset + count])
-                hash_values.append(combined)
-                offset += count
-
-        return hash_values
-
-    def _compute_hashes_cpu(self, samples, keys, num_samples, context):
-        """CPU path with ThreadPoolExecutor parallelism."""
-        def _compute_hash(i):
-            this_sample = {key: samples[key][i] for key in keys}
-            return self.calculate_hash(this_sample, context)
-
-        num_workers = min(num_samples, 4)
-        if num_workers > 1:
-            with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                return list(executor.map(_compute_hash, range(num_samples)))
-        else:
-            return [_compute_hash(i) for i in range(num_samples)]
