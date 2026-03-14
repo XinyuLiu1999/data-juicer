@@ -1,3 +1,4 @@
+import hashlib
 import math
 from concurrent.futures import ThreadPoolExecutor
 
@@ -16,7 +17,7 @@ torch = LazyLoader("torch")
 
 OP_NAME = "ray_image_deduplicator"
 
-HASH_METHOD = {"phash", "dhash", "whash", "ahash"}
+HASH_METHOD = {"phash", "dhash", "whash", "ahash", "md5"}
 
 
 def get_hash_method(method_name):
@@ -138,24 +139,37 @@ class RayImageDeduplicator(RayBasicDeduplicator):
         if method not in HASH_METHOD:
             raise ValueError(f"Keep strategy [{method}] is not supported. " f"Can only be one of {HASH_METHOD}.")
         self.method = method
-        self.hasher = get_hash_method(method)()
+        self.hasher = None if method == "md5" else get_hash_method(method)()
 
     def calculate_hash(self, sample, context=False):
         if self.image_key not in sample or not sample[self.image_key]:
             return RayBasicDeduplicator.EMPTY_HASH_VALUE
 
-        # load images
         loaded_image_keys = sample[self.image_key]
+
+        if self.method == "md5":
+            return self._calculate_md5(sample, loaded_image_keys)
+
+        # perceptual hash path
         sample, images = load_data_with_context(
             sample, context, loaded_image_keys, load_image, mm_bytes_key=self.image_bytes_key
         )
-
-        # compute hash
         hash_value = ""
         for key in images:
             hash_value += self.hasher.encode_image(image_array=np.array(images[key]))
-
         return hash_value
+
+    def _calculate_md5(self, sample, loaded_image_keys):
+        """Compute MD5 hash from raw image bytes for byte-exact dedup."""
+        from data_juicer.utils.mm_utils import load_file_byte
+
+        md5 = hashlib.md5()
+        for key in loaded_image_keys:
+            if isinstance(key, bytes):
+                md5.update(key)
+            else:
+                md5.update(load_file_byte(key))
+        return md5.hexdigest()
 
     def compute_stats_batched(self, samples, rank=None, context=False):
         """Compute hashes and check uniqueness for a batch of samples.

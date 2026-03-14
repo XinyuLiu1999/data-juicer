@@ -1056,7 +1056,7 @@ process:
   - ray_image_deduplicator:                                 # the simple image deduplicator that can deduplicate samples at document-level using exact matching of images between documents.
       backend: 'ray_actor'                                    # the backend for dedup, either 'ray_actor' or 'redis'
       redis_address: 'redis://localhost:6379'                 # the address of redis server
-      method: phash                                           # hash method for image. One of [phash, dhash, whash, ahash]
+      method: phash                                           # hash method for image. One of [phash, dhash, whash, ahash, md5]
   - ray_document_deduplicator:                              # the simple document deduplicator that can run on multi-nodes using md5 hashing exact matching method
       backend: 'ray_actor'                                    # the backend for dedup, either 'ray_actor' or 'redis'
       redis_address: 'redis://localhost:6379'                 # the address of redis server
