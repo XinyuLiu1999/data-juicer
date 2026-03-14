@@ -161,11 +161,19 @@ class RayImageDeduplicator(RayBasicDeduplicator):
 
     def _calculate_md5(self, sample, loaded_image_keys):
         """Compute MD5 hash from raw image bytes for byte-exact dedup."""
-        from data_juicer.utils.mm_utils import load_file_byte
+        from data_juicer.utils.mm_utils import (
+            load_file_byte,
+            load_mm_bytes_from_sample,
+        )
 
         md5 = hashlib.md5()
-        for key in loaded_image_keys:
-            if isinstance(key, bytes):
+        for idx, key in enumerate(loaded_image_keys):
+            # Try image_bytes_key first (pre-loaded bytes in sample)
+            bytes_data = load_mm_bytes_from_sample(
+                sample, idx, mm_bytes_key=self.image_bytes_key)
+            if bytes_data is not None:
+                md5.update(bytes_data)
+            elif isinstance(key, bytes):
                 md5.update(key)
             else:
                 md5.update(load_file_byte(key))
