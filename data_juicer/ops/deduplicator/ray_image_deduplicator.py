@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
+from data_juicer.utils.constant import HashKeys
 from data_juicer.utils.lazy_loader import LazyLoader
 from data_juicer.utils.mm_utils import load_data_with_context, load_image
 
@@ -30,13 +31,15 @@ def get_hash_method(method_name):
 
 
 def _build_dct_matrix(n):
-    """Precompute the DCT-II basis matrix of size n x n."""
+    """Precompute the DCT-II basis matrix of size n x n.
+
+    Matches scipy.fftpack.dct type 2 (no normalization):
+        DCT[k] = 2 * sum_{i} x[i] * cos(pi * k * (2*i + 1) / (2*N))
+    """
     mat = np.zeros((n, n), dtype=np.float32)
     for k in range(n):
         for i in range(n):
-            mat[k, i] = math.cos(math.pi * k * (2 * i + 1) / (2 * n))
-    mat[0] *= 1.0 / math.sqrt(n)
-    mat[1:] *= math.sqrt(2.0 / n)
+            mat[k, i] = 2.0 * math.cos(math.pi * k * (2 * i + 1) / (2 * n))
     return mat
 
 
@@ -63,32 +66,35 @@ def _gpu_batch_phash(pil_images, device):
         list of hex hash strings
     """
     import torch
-    import torch.nn.functional as F
 
-    # CPU: resize to 32x32 and convert to float tensors
+    import PIL.Image
+
+    # CPU: convert to grayscale and resize to 32x32.
+    # Use PIL operations to match imagededup's load_image behavior.
     tensors = []
     for img in pil_images:
-        resized = img.resize((32, 32))
-        t = torch.from_numpy(np.array(resized, dtype=np.float32))  # (32, 32, 3)
+        gray_img = img.convert("L").resize(
+            (32, 32), PIL.Image.BILINEAR)
+        t = torch.from_numpy(
+            np.array(gray_img, dtype=np.float32))  # (32, 32)
         tensors.append(t)
 
-    batch = torch.stack(tensors).to(device)  # (B, 32, 32, 3)
-
-    # Grayscale: ITU-R BT.601 weights (same as PIL .convert('L'))
-    gray = (0.299 * batch[:, :, :, 0]
-            + 0.587 * batch[:, :, :, 1]
-            + 0.114 * batch[:, :, :, 2])  # (B, 32, 32)
+    gray = torch.stack(tensors).to(device)  # (B, 32, 32)
 
     # 2D DCT via matrix multiplication: DCT = M @ X @ M^T
+    # Uses scipy-compatible DCT-II (no ortho normalization)
     dct_mat = torch.from_numpy(_DCT_MATRIX_32).to(device)
     dct_result = torch.matmul(torch.matmul(dct_mat, gray), dct_mat.t())
 
     # Take top-left 8x8 low-frequency block
     low_freq = dct_result[:, :8, :8].reshape(-1, 64)  # (B, 64)
 
-    # Median threshold per image
-    medians = low_freq.median(dim=1, keepdim=True).values
-    hash_bits = (low_freq > medians).cpu().numpy().astype(np.uint8)  # (B, 64)
+    # Median threshold per image, excluding DC term (index 0)
+    # to match imagededup: np.median(flatten(dct_reduced_coef)[1:])
+    medians = low_freq[:, 1:].median(dim=1, keepdim=True).values
+
+    # Use >= to match imagededup: hash_mat = dct_reduced_coef >= median
+    hash_bits = (low_freq >= medians).cpu().numpy().astype(np.uint8)  # (B, 64)
 
     # Pack 64 bits into 8 bytes → 16-char hex string
     hash_bytes = np.packbits(hash_bits, axis=1)  # (B, 8)
@@ -180,13 +186,10 @@ class RayImageDeduplicator(RayBasicDeduplicator):
                     self.backend._dedup_sets[dedup_set_id]
                     .is_unique.remote(hash_val)
                 )
-            from data_juicer.utils.lazy_loader import LazyLoader
-            ray_mod = LazyLoader("ray")
-            results = ray_mod.get(futures)
+            results = ray.get(futures)
         else:
             results = [self.backend.is_unique(hv) for hv in hash_values]
 
-        from data_juicer.utils.constant import HashKeys
         samples[HashKeys.is_unique] = results
         return samples
 
