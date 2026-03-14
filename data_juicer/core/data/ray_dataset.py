@@ -446,13 +446,29 @@ class RayDataset(DJDataset):
                     )
 
                     # Phase 2: check uniqueness (low concurrency, has ray.get)
-                    check_uniq_fn = catch_map_batches_exception(
-                        op.check_uniqueness_batched,
-                        skip_op_error=op.skip_op_error,
-                        op_name=op._name + "_check_uniqueness",
-                    )
+                    # Use Arrow-native wrapper that only extracts the hash
+                    # column instead of converting the entire table
+                    # (which includes huge image_bytes) to Python dicts.
+                    from data_juicer.utils.constant import HashKeys
+
+                    hash_col_name = HashKeys.hash
+                    unique_col_name = HashKeys.is_unique
+
+                    def check_uniqueness_arrow(table: pyarrow.Table):
+                        hash_values = table.column(
+                            hash_col_name).to_pylist()
+                        results = op.backend.are_unique_batched(
+                            hash_values) if hasattr(
+                            op.backend,
+                            'are_unique_batched') else [
+                            op.backend.is_unique(hv)
+                            for hv in hash_values]
+                        return table.append_column(
+                            unique_col_name,
+                            pyarrow.array(results))
+
                     self.data = self.data.map_batches(
-                        check_uniq_fn,
+                        check_uniqueness_arrow,
                         batch_size=batch_size,
                         batch_format="pyarrow",
                         concurrency=1,
