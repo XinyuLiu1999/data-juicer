@@ -207,7 +207,7 @@ def load_image(path_or_bytes):
         else:
             img_feature = Image()
             img = img_feature.decode_example(img_feature.encode_example(path_or_bytes))
-    img = img.convert("RGB")
+        img = img.convert("RGB")
     return img
 
 
