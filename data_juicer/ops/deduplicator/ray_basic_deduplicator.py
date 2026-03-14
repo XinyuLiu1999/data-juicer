@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from typing import Union
 
 from data_juicer.utils.constant import HashKeys
@@ -150,11 +151,21 @@ class RayBasicDeduplicator(Filter):
         keys = list(samples.keys())
         num_samples = len(samples[keys[0]])
 
-        # Phase 1: calculate hashes for all samples in the batch
-        hash_values = []
-        for i in range(num_samples):
+        # Phase 1: calculate hashes for all samples in the batch.
+        # Use ThreadPoolExecutor to parallelize image loading and hash
+        # computation within each batch. PIL image decode and numpy
+        # operations release the GIL, so threads provide real speedup.
+        def _compute_hash(i):
             this_sample = {key: samples[key][i] for key in keys}
-            hash_values.append(self.calculate_hash(this_sample, context))
+            return self.calculate_hash(this_sample, context)
+
+        num_workers = min(num_samples, 8)
+        if num_workers > 1:
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                hash_values = list(executor.map(
+                    _compute_hash, range(num_samples)))
+        else:
+            hash_values = [_compute_hash(i) for i in range(num_samples)]
 
         # Phase 2: batch the uniqueness checks
         if isinstance(self.backend, ActorBackend):

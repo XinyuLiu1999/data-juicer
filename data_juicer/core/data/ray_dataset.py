@@ -23,14 +23,12 @@ from data_juicer.utils.webdataset_utils import _custom_default_decoder
 def get_abs_path(path, dataset_dir):
     if is_remote_path(path):
         return path
+    if os.path.isabs(path):
+        return path
     path = os.path.join(dataset_dir, path)
     if is_remote_path(path):
         return path
-    full_path = os.path.abspath(path)
-    if os.path.exists(full_path):
-        return full_path
-    else:
-        return path
+    return os.path.abspath(path)
 
 
 def convert_to_absolute_paths(samples: pyarrow.Table, dataset_dir, path_keys):
