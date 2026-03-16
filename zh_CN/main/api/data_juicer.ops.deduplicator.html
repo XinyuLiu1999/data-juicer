@@ -1001,15 +1001,28 @@ duplicates by comparing these hashes. It operates in Ray distributed mode, suppo
 initialization, with supported methods listed in <cite>HASH_METHOD</cite>. If a sample does not
 contain an image, it is assigned an empty hash value. The operator loads images from the
 specified keys and computes their combined hash for comparison.</p>
+<p>The 'md5' method hashes raw image bytes directly without decoding,
+making it ~50x faster than perceptual methods but only catching
+byte-identical duplicates.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="data_juicer.ops.deduplicator.RayImageDeduplicator.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'ray_actor'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">redis_address</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'redis://localhost:6379'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'phash'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data_juicer/ops/deduplicator/ray_image_deduplicator.html#RayImageDeduplicator.__init__"><span class="viewcode-link"><span class="pre">[源代码]</span></span></a><a class="headerlink" href="#data_juicer.ops.deduplicator.RayImageDeduplicator.__init__" title="链接到此定义。">#</a></dt>
 <dd><p>Initialization.
 :param backend: the backend for dedup, either 'ray_actor' or 'redis'
 :param redis_address: the address of redis server
-:param method: the hash method to use
-:param args: extra args
-:param kwargs: extra args</p>
+:param method: the hash method to use. 'md5' for fast exact-match</p>
+<blockquote>
+<div><p>dedup on raw bytes; 'phash'/'dhash'/'whash'/'ahash' for
+perceptual dedup.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">参数<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>args</strong> -- extra args</p></li>
+<li><p><strong>kwargs</strong> -- extra args</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
