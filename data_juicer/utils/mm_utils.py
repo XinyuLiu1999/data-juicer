@@ -44,6 +44,21 @@ class _MetaSpecialTokens(type):
 
         return super().__new__(cls, name, bases, dct)
 
+    def __getattribute__(cls, name: str):
+        # For token attributes, always check env vars first so that
+        # runtime_env changes in Ray workers are picked up even if the
+        # module was imported before the env vars were set.
+        if name in _DEFAULT_TOKEN_FORMATS:
+            env_var = f"{SPECIAL_TOKEN_ENV_PREFIX}{name.upper()}"
+            env_val = os.environ.get(env_var)
+            if env_val is not None:
+                # Update the class attribute to match the env var
+                stored = super().__getattribute__(name)
+                if stored != env_val:
+                    super().__setattr__(name, env_val)
+                return env_val
+        return super().__getattribute__(name)
+
     def __setattr__(cls, name: str, value: str) -> None:
         if name in list(_DEFAULT_TOKEN_FORMATS.keys()):
             env_var = f"{SPECIAL_TOKEN_ENV_PREFIX}{name.upper()}"

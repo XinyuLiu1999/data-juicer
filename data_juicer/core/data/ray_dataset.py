@@ -336,7 +336,7 @@ class RayDataset(DJDataset):
                 cached_columns = self._run_single_op(op, cached_columns, tracer=tracer)
             except Exception as e:
                 logger.error(f"Error processing operator {op}: {e}.")
-                if op.runtime_env is not None:
+                if getattr(op, '_user_runtime_env', False):
                     logger.error("Try to fallback to the base runtime environment.")
                     original_runtime_env = op.runtime_env
                     try:

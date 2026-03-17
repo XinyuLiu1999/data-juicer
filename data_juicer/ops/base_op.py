@@ -417,6 +417,27 @@ class OP(metaclass=OPMetaClass):
             self.memory = size_to_bytes(self.memory) / 1024**3
         # Optional[Union[Dict[str, Any], "RuntimeEnv"]]
         self.runtime_env = kwargs.get("runtime_env", None)
+
+        # Ensure special token env vars are propagated to Ray workers.
+        # When ops are sent to Ray workers via map_batches, SpecialTokens
+        # is resolved from the worker's module state which reads env vars.
+        # Without explicit runtime_env, workers may not have these env vars.
+        self._user_runtime_env = self.runtime_env is not None
+        if is_ray_mode():
+            from data_juicer.utils.constant import SPECIAL_TOKEN_ENV_PREFIX
+            import os
+            token_env_vars = {
+                k: v for k, v in os.environ.items()
+                if k.startswith(SPECIAL_TOKEN_ENV_PREFIX)
+            }
+            if token_env_vars:
+                if self.runtime_env is None:
+                    self.runtime_env = {"env_vars": token_env_vars}
+                elif isinstance(self.runtime_env, dict):
+                    env_vars = self.runtime_env.setdefault("env_vars", {})
+                    for k, v in token_env_vars.items():
+                        env_vars.setdefault(k, v)
+
         self.ray_execution_mode = kwargs.get("ray_execution_mode", None)
         assert self.ray_execution_mode in [None, "actor", "task"]
 
