@@ -962,6 +962,27 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">memory</span> <span class="o">=</span> <span class="n">size_to_bytes</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">memory</span><span class="p">)</span> <span class="o">/</span> <span class="mi">1024</span><span class="o">**</span><span class="mi">3</span>
         <span class="c1"># Optional[Union[Dict[str, Any], &quot;RuntimeEnv&quot;]]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">runtime_env</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;runtime_env&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+        <span class="c1"># Ensure special token env vars are propagated to Ray workers.</span>
+        <span class="c1"># When ops are sent to Ray workers via map_batches, SpecialTokens</span>
+        <span class="c1"># is resolved from the worker&#39;s module state which reads env vars.</span>
+        <span class="c1"># Without explicit runtime_env, workers may not have these env vars.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_user_runtime_env</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime_env</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">is_ray_mode</span><span class="p">():</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.constant</span><span class="w"> </span><span class="kn">import</span> <span class="n">SPECIAL_TOKEN_ENV_PREFIX</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+            <span class="n">token_env_vars</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">SPECIAL_TOKEN_ENV_PREFIX</span><span class="p">)</span>
+            <span class="p">}</span>
+            <span class="k">if</span> <span class="n">token_env_vars</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime_env</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">runtime_env</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;env_vars&quot;</span><span class="p">:</span> <span class="n">token_env_vars</span><span class="p">}</span>
+                <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">runtime_env</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                    <span class="n">env_vars</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime_env</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;env_vars&quot;</span><span class="p">,</span> <span class="p">{})</span>
+                    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">token_env_vars</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                        <span class="n">env_vars</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">ray_execution_mode</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ray_execution_mode&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">ray_execution_mode</span> <span class="ow">in</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;actor&quot;</span><span class="p">,</span> <span class="s2">&quot;task&quot;</span><span class="p">]</span>
 
