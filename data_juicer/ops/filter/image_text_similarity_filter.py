@@ -43,6 +43,7 @@ class ImageTextSimilarityFilter(Filter):
         vertical_flip: bool = False,
         any_or_all: str = "any",
         reduce_mode: str = "avg",
+        save_embeddings: bool = False,
         *args,
         **kwargs,
     ):
@@ -65,6 +66,9 @@ class ImageTextSimilarityFilter(Filter):
             'avg': Take the average of multiple values
             'max': Take the max of multiple values
             'min': Take the min of multiple values
+        :param save_embeddings: whether to save the CLIP image embeddings
+            as a top-level column for downstream reuse (e.g., semantic
+            deduplication).
         :param args: extra args
         :param kwargs: extra args
         """
@@ -72,6 +76,7 @@ class ImageTextSimilarityFilter(Filter):
         super().__init__(*args, **kwargs)
         self.min_score = min_score
         self.max_score = max_score
+        self.save_embeddings = save_embeddings
         if reduce_mode not in ["avg", "max", "min"]:
             raise ValueError(
                 f"Reduce mode [{reduce_mode}] is not supported. " f'Can only be one of ["avg", "max", "min"].'
@@ -94,6 +99,8 @@ class ImageTextSimilarityFilter(Filter):
         # there is no image in this sample
         if self.image_key not in sample or not sample[self.image_key]:
             sample[Fields.stats][StatsKeys.image_text_similarity] = np.array([], dtype=np.float64)
+            if self.save_embeddings:
+                sample[Fields.image_embeddings] = []
             return sample
 
         # load images
@@ -105,6 +112,7 @@ class ImageTextSimilarityFilter(Filter):
         text = sample[self.text_key]
         offset = 0
         similarity = []
+        all_image_embeddings = []
         model, processor = get_model(self.model_key, rank, self.use_cuda())
 
         for chunk in text.split(SpecialTokens.eoc):
@@ -136,6 +144,13 @@ class ImageTextSimilarityFilter(Filter):
                 outputs = model(**inputs)
                 chunk_logits = outputs.logits_per_text / 100.0
 
+                if self.save_embeddings:
+                    image_embeds = outputs.image_embeds
+                    image_embeds = image_embeds / image_embeds.norm(
+                        dim=-1, keepdim=True)
+                    all_image_embeddings.extend(
+                        image_embeds.cpu().numpy().tolist())
+
                 if self.reduce_mode == "avg":
                     chunk_similarity = chunk_logits.mean()
                 elif self.reduce_mode == "max":
@@ -146,6 +161,8 @@ class ImageTextSimilarityFilter(Filter):
                 similarity.append(float(chunk_similarity))
             offset += count
         sample[Fields.stats][StatsKeys.image_text_similarity] = similarity
+        if self.save_embeddings:
+            sample[Fields.image_embeddings] = all_image_embeddings
 
         return sample
 
@@ -207,6 +224,7 @@ class ImageTextSimilarityFilter(Filter):
         # Batched inference: process all chunks at once using separate
         # image/text encoding for efficiency
         chunk_similarities = []
+        all_image_embeds_np = None
         if chunk_texts:
             model, processor = get_model(self.model_key, rank, self.use_cuda())
 
@@ -225,6 +243,9 @@ class ImageTextSimilarityFilter(Filter):
             with torch.no_grad():
                 image_features = model.get_image_features(**image_inputs)
                 image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+
+            if self.save_embeddings:
+                all_image_embeds_np = image_features.cpu().numpy()
 
             # Batched text encoding
             text_inputs = processor(
@@ -256,12 +277,29 @@ class ImageTextSimilarityFilter(Filter):
                     sim = chunk_logits.min()
                 chunk_similarities.append(float(sim))
 
+        # Initialize the embeddings column if saving
+        if self.save_embeddings and Fields.image_embeddings not in samples:
+            samples[Fields.image_embeddings] = [None] * num_samples
+
         # Scatter results back to samples
         for i in range(num_samples):
             if sample_chunk_map[i] is None:
+                if self.save_embeddings:
+                    if samples[Fields.image_embeddings][i] is None:
+                        samples[Fields.image_embeddings][i] = []
                 continue
             similarity = [chunk_similarities[ci] for ci in sample_chunk_map[i]]
             samples[Fields.stats][i][StatsKeys.image_text_similarity] = similarity
+
+            if self.save_embeddings:
+                # Gather per-image embeddings for this sample
+                sample_embeds = []
+                for ci in sample_chunk_map[i]:
+                    start, count = image_offsets[ci]
+                    for j in range(count):
+                        sample_embeds.append(
+                            all_image_embeds_np[start + j].tolist())
+                samples[Fields.image_embeddings][i] = sample_embeds
 
         return samples
 

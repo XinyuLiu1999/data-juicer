@@ -31,6 +31,10 @@ class Fields(object):
     # the name of directory to store the produced multimodal data
     multimodal_data_output_dir = DEFAULT_PREFIX + "produced_data__"
 
+    # embeddings produced by filters/mappers for downstream reuse
+    image_embeddings = DEFAULT_PREFIX + "image_embeddings__"
+    text_embeddings = DEFAULT_PREFIX + "text_embeddings__"
+
 
 class BatchMetaKeys(object):
     entity_attribute = "entity_attribute"
