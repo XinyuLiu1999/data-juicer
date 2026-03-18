@@ -1957,10 +1957,11 @@ vars in the sample temporarily.</p></li>
 <dt class="sig sig-object py" id="data_juicer.ops.filter.ImageBorderVarianceFilter">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">data_juicer.ops.filter.</span></span><span class="sig-name descname"><span class="pre">ImageBorderVarianceFilter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data_juicer/ops/filter/image_border_variance_filter.html#ImageBorderVarianceFilter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.ops.filter.ImageBorderVarianceFilter" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <a class="reference internal" href="data_juicer.ops.base_op.html#data_juicer.ops.base_op.Filter" title="data_juicer.ops.base_op.Filter"><code class="xref py py-class docutils literal notranslate"><span class="pre">Filter</span></code></a></p>
-<p>Filter to detect and remove images with artificial borders or bars
-while preserving product-style images with white/light backgrounds.</p>
+<p>Filter to detect and remove images with artificial black/white
+borders or bars while preserving product-style images with white/light
+backgrounds.</p>
 <p>Registered as <code class="docutils literal notranslate"><span class="pre">image_border_variance_filter</span></code>.</p>
-<p>Unlike simple variance-based border checks, this filter:</p>
+<p>This filter:</p>
 <ul class="simple">
 <li><p>Checks each edge <strong>independently</strong> so partial bars (e.g. a single
 watermark strip at the bottom) are caught.</p></li>
@@ -1975,11 +1976,12 @@ strips) and <strong>light bars</strong> (white info strips, bright frames).</p><
 white / off-white / light-grey backgrounds with content in the
 centre (typical of e-commerce product photos, icons, logos).</p></li>
 </ul>
+<p>Note: This filter only targets black/white (dark/light) bars. Coloured
+frames that are not dark or light will <strong>not</strong> be filtered.</p>
 <dl class="simple">
 <dt>Use cases:</dt><dd><ul class="simple">
 <li><p>Filter stock-photo watermark bars (Alamy, Shutterstock, etc.)</p></li>
 <li><p>Filter letterboxed / pillarboxed video frames</p></li>
-<li><p>Filter images with decorative coloured frames</p></li>
 <li><p>Preserve product photos, icons, and logos on light backgrounds</p></li>
 </ul>
 </dd>

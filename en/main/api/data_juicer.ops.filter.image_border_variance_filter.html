@@ -518,13 +518,10 @@
 <dl class="py function">
 <dt class="sig sig-object py" id="data_juicer.ops.filter.image_border_variance_filter.calc_border_score">
 <span class="sig-prename descclassname"><span class="pre">data_juicer.ops.filter.image_border_variance_filter.</span></span><span class="sig-name descname"><span class="pre">calc_border_score</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">border_ratio</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">variance_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uniformity_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.85</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">light_bg_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">200</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">neutral_max_spread</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dark_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">80</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">light_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">220</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bar_ratio_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.9</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_brightness_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uniformity_contrast_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">light_bar_adjacent_max_brightness</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">180</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">center_variance_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">500</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data_juicer/ops/filter/image_border_variance_filter.html#calc_border_score"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.ops.filter.image_border_variance_filter.calc_border_score" title="Link to this definition">#</a></dt>
-<dd><p>Detect artificial borders / bars while preserving product-style images.</p>
-<p>The function performs three layers of detection:</p>
+<dd><p>Detect artificial black/white borders / bars while preserving
+product-style images.</p>
+<p>The function performs two layers of detection:</p>
 <ol class="arabic simple">
-<li><p><strong>Per-side uniform-frame detection</strong> – each border (top / bottom /
-left / right) is checked independently for low variance + high
-colour uniformity.  A non-light-neutral uniform frame on ≥ 3 sides
-is flagged.</p></li>
 <li><p><strong>Dark / light bar detection</strong> – each side is checked for a
 concentration of very dark (&lt; <em>dark_threshold</em>) or very bright
 (&gt; <em>light_threshold</em>) pixels, with a <strong>multi-scale scan</strong> to catch
@@ -561,7 +558,7 @@ light bar to be confirmed (prevents product-bg false positives).</p></li>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><dl class="simple">
-<dt>1 if an artificial frame or bar is detected (should filter),</dt><dd><p>0 if the image is clean or product-style (should keep).</p>
+<dt>1 if an artificial black/white bar is detected (should filter),</dt><dd><p>0 if the image is clean or product-style (should keep).</p>
 </dd>
 </dl>
 </p>
@@ -576,10 +573,11 @@ light bar to be confirmed (prevents product-bg false positives).</p></li>
 <dt class="sig sig-object py" id="data_juicer.ops.filter.image_border_variance_filter.ImageBorderVarianceFilter">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">data_juicer.ops.filter.image_border_variance_filter.</span></span><span class="sig-name descname"><span class="pre">ImageBorderVarianceFilter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data_juicer/ops/filter/image_border_variance_filter.html#ImageBorderVarianceFilter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.ops.filter.image_border_variance_filter.ImageBorderVarianceFilter" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <a class="reference internal" href="data_juicer.ops.base_op.html#data_juicer.ops.base_op.Filter" title="data_juicer.ops.base_op.Filter"><code class="xref py py-class docutils literal notranslate"><span class="pre">Filter</span></code></a></p>
-<p>Filter to detect and remove images with artificial borders or bars
-while preserving product-style images with white/light backgrounds.</p>
+<p>Filter to detect and remove images with artificial black/white
+borders or bars while preserving product-style images with white/light
+backgrounds.</p>
 <p>Registered as <code class="docutils literal notranslate"><span class="pre">image_border_variance_filter</span></code>.</p>
-<p>Unlike simple variance-based border checks, this filter:</p>
+<p>This filter:</p>
 <ul class="simple">
 <li><p>Checks each edge <strong>independently</strong> so partial bars (e.g. a single
 watermark strip at the bottom) are caught.</p></li>
@@ -594,11 +592,12 @@ strips) and <strong>light bars</strong> (white info strips, bright frames).</p><
 white / off-white / light-grey backgrounds with content in the
 centre (typical of e-commerce product photos, icons, logos).</p></li>
 </ul>
+<p>Note: This filter only targets black/white (dark/light) bars. Coloured
+frames that are not dark or light will <strong>not</strong> be filtered.</p>
 <dl class="simple">
 <dt>Use cases:</dt><dd><ul class="simple">
 <li><p>Filter stock-photo watermark bars (Alamy, Shutterstock, etc.)</p></li>
 <li><p>Filter letterboxed / pillarboxed video frames</p></li>
-<li><p>Filter images with decorative coloured frames</p></li>
 <li><p>Preserve product photos, icons, and logos on light backgrounds</p></li>
 </ul>
 </dd>
