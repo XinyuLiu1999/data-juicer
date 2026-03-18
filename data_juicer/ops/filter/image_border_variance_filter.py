@@ -119,19 +119,16 @@ def calc_border_score(image,
                       uniformity_contrast_threshold=3.0,
                       light_bar_adjacent_max_brightness=180,
                       center_variance_threshold=500):
-    """Detect artificial borders / bars while preserving product-style images.
+    """Detect artificial black/white borders / bars while preserving
+    product-style images.
 
-    The function performs three layers of detection:
+    The function performs two layers of detection:
 
-    1. **Per-side uniform-frame detection** – each border (top / bottom /
-       left / right) is checked independently for low variance + high
-       colour uniformity.  A non-light-neutral uniform frame on ≥ 3 sides
-       is flagged.
-    2. **Dark / light bar detection** – each side is checked for a
+    1. **Dark / light bar detection** – each side is checked for a
        concentration of very dark (< *dark_threshold*) or very bright
        (> *light_threshold*) pixels, with a **multi-scale scan** to catch
        thin bars missed at the default *border_ratio*.
-    3. **Confirmation** – candidate bars are validated via *sharp edge*
+    2. **Confirmation** – candidate bars are validated via *sharp edge*
        detection (abrupt brightness transition) **or** *uniformity contrast*
        (bar variance ≪ adjacent content variance).  Light bars additionally
        require the adjacent content to be darker than
@@ -160,7 +157,7 @@ def calc_border_score(image,
         center_variance_threshold: Min centre variance for "has content".
 
     Returns:
-        int: 1 if an artificial frame or bar is detected (should filter),
+        int: 1 if an artificial black/white bar is detected (should filter),
              0 if the image is clean or product-style (should keep).
     """
     img = np.array(image.convert('RGB'), dtype=np.float32)
@@ -184,7 +181,7 @@ def calc_border_score(image,
     }
 
     side_info = {}      # per-side metadata
-    frame_sides = []    # sides that are uniform
+    frame_sides = []    # sides that are uniform (used for product-style guard)
     bar_sides = []      # sides that look like dark/light bars
 
     for name, strip in borders.items():
@@ -192,7 +189,7 @@ def calc_border_score(image,
         mean_color = np.mean(pixels, axis=0)
         var = np.mean(np.var(pixels, axis=0))
 
-        # Uniformity check
+        # Uniformity check (retained for product-style guard)
         distances = np.sqrt(np.sum((pixels - mean_color) ** 2, axis=1))
         uniform_ratio = float(np.mean(distances < 30))
         is_uniform = (var < variance_threshold
@@ -254,19 +251,6 @@ def calc_border_score(image,
     # ------------------------------------------------------------------
     # 3. Confirm candidate bars (sharp edge OR uniformity contrast)
     # ------------------------------------------------------------------
-    # Both confirmation paths now also check absolute brightness of the
-    # thin strip to ensure it is in true bar territory, not just a
-    # natural dark/light region of the scene.
-    #
-    # Sharp-edge confirmation: the strip must have a clear brightness
-    #   boundary AND its mean brightness must be below dark_threshold/2
-    #   (for dark bars) or above light_threshold (for light bars).
-    #   Natural scene transitions (dark wall → bright window) have
-    #   moderate brightness (50–80) that real bars don't.
-    #
-    # Uniformity-contrast confirmation: the strip must be flat (low var),
-    #   have high contrast ratio vs adjacent content, AND have very low
-    #   brightness.
     confirmed_bars = []
     for s in bar_sides:
         has_edge = _has_sharp_edge(img, s, bh, bw, edge_brightness_threshold)
@@ -310,13 +294,7 @@ def calc_border_score(image,
     # ------------------------------------------------------------------
     # 5. Decision logic
     # ------------------------------------------------------------------
-    # Full uniform-colour frame (≥ 3 non-light-neutral sides)
-    uniform_non_light = [
-        s for s in frame_sides if not side_info[s]['is_light_neutral']
-    ]
-    has_full_frame = len(uniform_non_light) >= 3
-
-    # Artificial bar detected on at least one side
+    # Artificial black/white bar detected on at least one side
     has_bar = len(bar_sides) > 0
 
     # Product-style image: all uniform sides are light-neutral + centre has
@@ -329,19 +307,20 @@ def calc_border_score(image,
         all_uniform_light and has_center_content and len(frame_sides) >= 2
     )
 
-    should_filter = (has_full_frame or has_bar) and not is_product_style
+    should_filter = has_bar and not is_product_style
     return 1 if should_filter else 0
 
 
 @OPERATORS.register_module('image_border_variance_filter')
 @LOADED_IMAGES.register_module('image_border_variance_filter')
 class ImageBorderVarianceFilter(Filter):
-    """Filter to detect and remove images with artificial borders or bars
-    while preserving product-style images with white/light backgrounds.
+    """Filter to detect and remove images with artificial black/white
+    borders or bars while preserving product-style images with white/light
+    backgrounds.
 
     Registered as ``image_border_variance_filter``.
 
-    Unlike simple variance-based border checks, this filter:
+    This filter:
 
     - Checks each edge **independently** so partial bars (e.g. a single
       watermark strip at the bottom) are caught.
@@ -356,10 +335,12 @@ class ImageBorderVarianceFilter(Filter):
       white / off-white / light-grey backgrounds with content in the
       centre (typical of e-commerce product photos, icons, logos).
 
+    Note: This filter only targets black/white (dark/light) bars. Coloured
+    frames that are not dark or light will **not** be filtered.
+
     Use cases:
         - Filter stock-photo watermark bars (Alamy, Shutterstock, etc.)
         - Filter letterboxed / pillarboxed video frames
-        - Filter images with decorative coloured frames
         - Preserve product photos, icons, and logos on light backgrounds
     """
 
