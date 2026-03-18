@@ -561,6 +561,7 @@
         <span class="n">vertical_flip</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">any_or_all</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;any&quot;</span><span class="p">,</span>
         <span class="n">reduce_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;avg&quot;</span><span class="p">,</span>
+        <span class="n">save_embeddings</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="o">*</span><span class="n">args</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
@@ -583,6 +584,9 @@
 <span class="sd">            &#39;avg&#39;: Take the average of multiple values</span>
 <span class="sd">            &#39;max&#39;: Take the max of multiple values</span>
 <span class="sd">            &#39;min&#39;: Take the min of multiple values</span>
+<span class="sd">        :param save_embeddings: whether to save the CLIP image embeddings</span>
+<span class="sd">            as a top-level column for downstream reuse (e.g., semantic</span>
+<span class="sd">            deduplication).</span>
 <span class="sd">        :param args: extra args</span>
 <span class="sd">        :param kwargs: extra args</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -590,6 +594,7 @@
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">min_score</span> <span class="o">=</span> <span class="n">min_score</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">max_score</span> <span class="o">=</span> <span class="n">max_score</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">save_embeddings</span> <span class="o">=</span> <span class="n">save_embeddings</span>
         <span class="k">if</span> <span class="n">reduce_mode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;avg&quot;</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">]:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;Reduce mode [</span><span class="si">{</span><span class="n">reduce_mode</span><span class="si">}</span><span class="s2">] is not supported. &quot;</span> <span class="sa">f</span><span class="s1">&#39;Can only be one of [&quot;avg&quot;, &quot;max&quot;, &quot;min&quot;].&#39;</span>
@@ -615,6 +620,8 @@
         <span class="c1"># there is no image in this sample</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sample</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">sample</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">image_key</span><span class="p">]:</span>
             <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">stats</span><span class="p">][</span><span class="n">StatsKeys</span><span class="o">.</span><span class="n">image_text_similarity</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">save_embeddings</span><span class="p">:</span>
+                <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">image_embeddings</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">return</span> <span class="n">sample</span>
 
         <span class="c1"># load images</span>
@@ -626,6 +633,7 @@
         <span class="n">text</span> <span class="o">=</span> <span class="n">sample</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">text_key</span><span class="p">]</span>
         <span class="n">offset</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="n">similarity</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">all_image_embeddings</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">model</span><span class="p">,</span> <span class="n">processor</span> <span class="o">=</span> <span class="n">get_model</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_key</span><span class="p">,</span> <span class="n">rank</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_cuda</span><span class="p">())</span>
 
         <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">SpecialTokens</span><span class="o">.</span><span class="n">eoc</span><span class="p">):</span>
@@ -657,6 +665,13 @@
                 <span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="o">**</span><span class="n">inputs</span><span class="p">)</span>
                 <span class="n">chunk_logits</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">logits_per_text</span> <span class="o">/</span> <span class="mf">100.0</span>
 
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">save_embeddings</span><span class="p">:</span>
+                    <span class="n">image_embeds</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">image_embeds</span>
+                    <span class="n">image_embeds</span> <span class="o">=</span> <span class="n">image_embeds</span> <span class="o">/</span> <span class="n">image_embeds</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span>
+                        <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                    <span class="n">all_image_embeddings</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+                        <span class="n">image_embeds</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">reduce_mode</span> <span class="o">==</span> <span class="s2">&quot;avg&quot;</span><span class="p">:</span>
                     <span class="n">chunk_similarity</span> <span class="o">=</span> <span class="n">chunk_logits</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
                 <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">reduce_mode</span> <span class="o">==</span> <span class="s2">&quot;max&quot;</span><span class="p">:</span>
@@ -667,6 +682,8 @@
                 <span class="n">similarity</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">chunk_similarity</span><span class="p">))</span>
             <span class="n">offset</span> <span class="o">+=</span> <span class="n">count</span>
         <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">stats</span><span class="p">][</span><span class="n">StatsKeys</span><span class="o">.</span><span class="n">image_text_similarity</span><span class="p">]</span> <span class="o">=</span> <span class="n">similarity</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">save_embeddings</span><span class="p">:</span>
+            <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">image_embeddings</span><span class="p">]</span> <span class="o">=</span> <span class="n">all_image_embeddings</span>
 
         <span class="k">return</span> <span class="n">sample</span></div>
 
@@ -731,6 +748,7 @@
         <span class="c1"># Batched inference: process all chunks at once using separate</span>
         <span class="c1"># image/text encoding for efficiency</span>
         <span class="n">chunk_similarities</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">all_image_embeds_np</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">chunk_texts</span><span class="p">:</span>
             <span class="n">model</span><span class="p">,</span> <span class="n">processor</span> <span class="o">=</span> <span class="n">get_model</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_key</span><span class="p">,</span> <span class="n">rank</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_cuda</span><span class="p">())</span>
 
@@ -749,6 +767,9 @@
             <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
                 <span class="n">image_features</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">get_image_features</span><span class="p">(</span><span class="o">**</span><span class="n">image_inputs</span><span class="p">)</span>
                 <span class="n">image_features</span> <span class="o">=</span> <span class="n">image_features</span> <span class="o">/</span> <span class="n">image_features</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">save_embeddings</span><span class="p">:</span>
+                <span class="n">all_image_embeds_np</span> <span class="o">=</span> <span class="n">image_features</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
 
             <span class="c1"># Batched text encoding</span>
             <span class="n">text_inputs</span> <span class="o">=</span> <span class="n">processor</span><span class="p">(</span>
@@ -780,12 +801,29 @@
                     <span class="n">sim</span> <span class="o">=</span> <span class="n">chunk_logits</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
                 <span class="n">chunk_similarities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">sim</span><span class="p">))</span>
 
+        <span class="c1"># Initialize the embeddings column if saving</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">save_embeddings</span> <span class="ow">and</span> <span class="n">Fields</span><span class="o">.</span><span class="n">image_embeddings</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">samples</span><span class="p">:</span>
+            <span class="n">samples</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">image_embeddings</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="n">num_samples</span>
+
         <span class="c1"># Scatter results back to samples</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_samples</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">sample_chunk_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">save_embeddings</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">samples</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">image_embeddings</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">samples</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">image_embeddings</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
                 <span class="k">continue</span>
             <span class="n">similarity</span> <span class="o">=</span> <span class="p">[</span><span class="n">chunk_similarities</span><span class="p">[</span><span class="n">ci</span><span class="p">]</span> <span class="k">for</span> <span class="n">ci</span> <span class="ow">in</span> <span class="n">sample_chunk_map</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span>
             <span class="n">samples</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">stats</span><span class="p">][</span><span class="n">i</span><span class="p">][</span><span class="n">StatsKeys</span><span class="o">.</span><span class="n">image_text_similarity</span><span class="p">]</span> <span class="o">=</span> <span class="n">similarity</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">save_embeddings</span><span class="p">:</span>
+                <span class="c1"># Gather per-image embeddings for this sample</span>
+                <span class="n">sample_embeds</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">ci</span> <span class="ow">in</span> <span class="n">sample_chunk_map</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span>
+                    <span class="n">start</span><span class="p">,</span> <span class="n">count</span> <span class="o">=</span> <span class="n">image_offsets</span><span class="p">[</span><span class="n">ci</span><span class="p">]</span>
+                    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">count</span><span class="p">):</span>
+                        <span class="n">sample_embeds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="n">all_image_embeds_np</span><span class="p">[</span><span class="n">start</span> <span class="o">+</span> <span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+                <span class="n">samples</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">image_embeddings</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">sample_embeds</span>
 
         <span class="k">return</span> <span class="n">samples</span></div>
 
