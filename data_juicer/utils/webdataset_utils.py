@@ -27,6 +27,22 @@ def _load_image(value, format="PIL"):
         return np.asarray(PIL.Image.open(io.BytesIO(value)))
 
 
+def _blip3o_decoder(sample: Dict[str, Any]) -> Dict[str, Any]:
+    """Lightweight decoder for BLIP3o WebDataset that keeps images as raw
+    bytes (Arrow-serializable) and only decodes text fields."""
+    sample = dict(sample)
+    for key, value in sample.items():
+        extension = key.split(".")[-1]
+        if key.startswith("__"):
+            continue
+        elif extension in ["txt", "text"]:
+            sample[key] = value.decode("utf-8")
+        elif extension == "json":
+            sample[key] = json.loads(value)
+        # Images (jpg, png, etc.) are left as raw bytes
+    return sample
+
+
 def _custom_default_decoder(sample: Dict[str, Any], format: Optional[Union[bool, str]] = True):
     """A custom decoder for webdataset. Support multiple images list decoding.
 

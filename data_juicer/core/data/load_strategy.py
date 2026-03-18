@@ -245,19 +245,28 @@ class RayLocalJsonDataLoadStrategy(RayDataLoadStrategy):
             ".npy": "numpy",
             ".tfrecords": "tfrecords",
             ".lance": "lance",
+            ".tar": "webdataset",
         }
+        # Recognized format names that can be specified directly
+        known_formats = set(file_extension_map.values()) | {"webdataset"}
+
         auto_detect = False
-        data_source = self.ds_config.get("source", None)
-        if data_source is None:
-            auto_detect = True
+        # Check explicit 'format' field first, then fall back to 'source'
+        explicit_format = self.ds_config.get("format", None)
+        if explicit_format and explicit_format in known_formats:
+            data_format = explicit_format
         else:
-            suffix = os.path.splitext(data_source)[1]
-            if suffix in file_extension_map:
-                data_format = file_extension_map[suffix]
-            elif "." + data_source in file_extension_map:
-                data_format = file_extension_map["." + data_source]
-            else:
+            data_source = self.ds_config.get("source", None)
+            if data_source is None:
                 auto_detect = True
+            else:
+                suffix = os.path.splitext(data_source)[1]
+                if suffix in file_extension_map:
+                    data_format = file_extension_map[suffix]
+                elif "." + data_source in file_extension_map:
+                    data_format = file_extension_map["." + data_source]
+                else:
+                    auto_detect = True
         if auto_detect:
             item_path = path
             if os.path.isdir(item_path):
@@ -280,8 +289,14 @@ class RayLocalJsonDataLoadStrategy(RayDataLoadStrategy):
             logger.info(f"Try to load data as {data_format}.")
         else:
             logger.info(f"Loading {data_format} data.")
+        read_kwargs = {}
+        if data_format == "webdataset" and self.cfg and getattr(
+                self.cfg, "blip3o_preprocessing", False):
+            from data_juicer.utils.webdataset_utils import _blip3o_decoder
+            read_kwargs["decoder"] = _blip3o_decoder
+
         try:
-            dataset = RayDataset.read(data_format, path)
+            dataset = RayDataset.read(data_format, path, **read_kwargs)
             return RayDataset(dataset, dataset_path=path, cfg=self.cfg)
         except Exception as e:
             if auto_detect:

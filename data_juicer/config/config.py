@@ -411,6 +411,28 @@ def init_configs(args: Optional[List[str]] = None, which_entry: object = None, l
                 "Larger values amortize per-batch overhead but use more memory.",
             )
             parser.add_argument(
+                "--blip3o_preprocessing",
+                type=bool,
+                default=False,
+                help="Enable BLIP3o WebDataset format preprocessing. When True, "  # noqa: E251
+                "converts 'jpg' (PIL Image) to 'image_bytes', creates 'images' "
+                "IDs from '__key__', and renames 'txt' to 'text'.",
+            )
+            parser.add_argument(
+                "--blip3o_preprocessing_num_cpus",
+                type=float,
+                default=0.25,
+                help="Number of CPUs per preprocessing task for BLIP3o format. "  # noqa: E251
+                "Lower values (e.g. 0.25) allow more concurrent tasks.",
+            )
+            parser.add_argument(
+                "--blip3o_preprocessing_batch_size",
+                type=int,
+                default=1000,
+                help="Batch size for BLIP3o preprocessing map_batches. "  # noqa: E251
+                "Larger values amortize per-batch overhead but use more memory.",
+            )
+            parser.add_argument(
                 "--use_cache",
                 type=bool,
                 default=True,

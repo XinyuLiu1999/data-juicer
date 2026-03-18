@@ -194,6 +194,66 @@ def preprocess_laioncoco_ray(table: pyarrow.Table, image_special_token: str) -> 
     return out_table
 
 
+def preprocess_blip3o_ray(table: pyarrow.Table, image_special_token: str) -> pyarrow.Table:
+    """
+    Ray-compatible BLIP3o WebDataset preprocessing operating on PyArrow tables.
+
+    Transforms the BLIP3o WebDataset schema (columns: jpg, txt, __key__,
+    __url__) into the standard Data-Juicer format:
+    - Renames 'txt' to 'text', prepended with an image special token
+    - Wraps 'jpg' (raw JPEG bytes) into 'image_bytes' (list of bytes) and
+      creates 'images' (synthetic IDs derived from __key__)
+
+    Expects images as raw bytes (not PIL), which is the output of
+    _blip3o_decoder.
+    """
+    num_rows = table.num_rows
+
+    # --- Wrap raw image bytes from 'jpg' column ---
+    jpg_col = table.column("jpg").to_pylist()
+    key_col = table.column("__key__").to_pylist()
+
+    image_ids = []
+    image_bytes_list = []
+    for i in range(num_rows):
+        img_bytes = jpg_col[i]
+        key = key_col[i] if key_col[i] is not None else str(i)
+        if img_bytes is not None:
+            image_bytes_list.append(img_bytes)
+            image_ids.append(f"{key}.jpg")
+        else:
+            image_bytes_list.append(None)
+            image_ids.append(None)
+
+    # Wrap each value in a single-element list (Data-Juicer expects lists)
+    images_col = pyarrow.array(
+        [[iid] if iid is not None else [] for iid in image_ids],
+        type=pyarrow.list_(pyarrow.string()),
+    )
+    image_bytes_col = pyarrow.array(
+        [[ib] if ib is not None else [] for ib in image_bytes_list],
+        type=pyarrow.list_(pyarrow.binary()),
+    )
+
+    # --- Build text column from 'txt', prepend image special token ---
+    txt_col = table.column("txt").to_pylist()
+    text_col = pyarrow.array([
+        (image_special_token + (t if t is not None else ""))
+        for t in txt_col
+    ])
+
+    # --- Build output table, dropping original webdataset columns ---
+    cols_to_drop = {"jpg", "txt"}
+    cols_to_keep = [name for name in table.column_names
+                    if name not in cols_to_drop]
+    out_table = table.select(cols_to_keep)
+    out_table = out_table.append_column("text", text_col)
+    out_table = out_table.append_column("images", images_col)
+    out_table = out_table.append_column("image_bytes", image_bytes_col)
+
+    return out_table
+
+
 def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg):
     """Preprocess dataset and return (dataset, cached_columns).
 
@@ -239,6 +299,37 @@ def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg):
             columns.update(["text", "images", "image_bytes"])
         else:
             logger.info("LAION-COCO preprocessing already applied, skipping.")
+
+    if cfg and getattr(cfg, "blip3o_preprocessing", False):
+        # Skip if preprocessing was already applied (jpg column removed)
+        if "jpg" in columns:
+            from data_juicer.utils.mm_utils import SpecialTokens
+
+            preprocessing_num_cpus = getattr(
+                cfg, "blip3o_preprocessing_num_cpus", 0.25
+            )
+            preprocessing_batch_size = getattr(
+                cfg, "blip3o_preprocessing_batch_size",
+                DEFAULT_BATCH_SIZE
+            )
+            logger.info(
+                f"Applying BLIP3o WebDataset preprocessing for Ray dataset "
+                f"(num_cpus={preprocessing_num_cpus}, "
+                f"batch_size={preprocessing_batch_size})..."
+            )
+            dataset = dataset.map_batches(
+                partial(preprocess_blip3o_ray,
+                        image_special_token=SpecialTokens.image),
+                batch_format="pyarrow",
+                batch_size=preprocessing_batch_size,
+                num_cpus=preprocessing_num_cpus,
+            )
+            # Update columns to reflect blip3o preprocessing changes
+            columns.discard("jpg")
+            columns.discard("txt")
+            columns.update(["text", "images", "image_bytes"])
+        else:
+            logger.info("BLIP3o preprocessing already applied, skipping.")
 
     return dataset, columns
 
@@ -495,11 +586,11 @@ class RayDataset(DJDataset):
         return self.data.count()
 
     @classmethod
-    def read(cls, data_format: str, paths: Union[str, List[str]]) -> RayDataset:
+    def read(cls, data_format: str, paths: Union[str, List[str]], **kwargs) -> RayDataset:
         if data_format in {"json", "jsonl"}:
             return RayDataset.read_json(paths)
         elif data_format == "webdataset":
-            return RayDataset.read_webdataset(paths)
+            return RayDataset.read_webdataset(paths, **kwargs)
         elif data_format in {
             "parquet",
             "images",
@@ -527,8 +618,10 @@ class RayDataset(DJDataset):
             return ray.data.read_json(paths)
 
     @classmethod
-    def read_webdataset(cls, paths: Union[str, List[str]]) -> RayDataset:
-        return ray.data.read_webdataset(paths, decoder=partial(_custom_default_decoder, format="PIL"))
+    def read_webdataset(cls, paths: Union[str, List[str]], decoder=None) -> RayDataset:
+        if decoder is None:
+            decoder = partial(_custom_default_decoder, format="PIL")
+        return ray.data.read_webdataset(paths, decoder=decoder)
 
     def to_list(self) -> list:
         return self.data.to_pandas().to_dict(orient="records")
