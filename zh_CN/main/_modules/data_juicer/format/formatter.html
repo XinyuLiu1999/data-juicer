@@ -556,6 +556,7 @@
         <span class="n">text_keys</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">add_suffix</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">laioncoco_preprocessing</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">blip3o_preprocessing</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -571,6 +572,8 @@
 <span class="sd">            meta info</span>
 <span class="sd">        :param laioncoco_preprocessing: whether to apply LAION-COCO</span>
 <span class="sd">            format preprocessing</span>
+<span class="sd">        :param blip3o_preprocessing: whether to apply BLIP3o WebDataset</span>
+<span class="sd">            format preprocessing</span>
 <span class="sd">        :param kwargs: extra args</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">type</span> <span class="o">=</span> <span class="nb">type</span>
@@ -578,7 +581,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">text_keys</span> <span class="o">=</span> <span class="n">text_keys</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">data_files</span> <span class="o">=</span> <span class="n">find_files_with_suffix</span><span class="p">(</span><span class="n">dataset_path</span><span class="p">,</span> <span class="n">suffixes</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">add_suffix</span> <span class="o">=</span> <span class="n">add_suffix</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">laioncoco_preprocessing</span> <span class="o">=</span> <span class="n">laioncoco_preprocessing</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">laioncoco_preprocessing</span> <span class="o">=</span> <span class="n">laioncoco_preprocessing</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">blip3o_preprocessing</span> <span class="o">=</span> <span class="n">blip3o_preprocessing</span></div>
 
 
 <div class="viewcode-block" id="LocalFormatter.load_dataset">
@@ -610,6 +614,8 @@
             <span class="n">datasets</span> <span class="o">=</span> <span class="n">NestedDataset</span><span class="p">(</span><span class="n">concatenate_datasets</span><span class="p">([</span><span class="n">ds</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">ds</span> <span class="ow">in</span> <span class="n">datasets</span><span class="o">.</span><span class="n">items</span><span class="p">()]))</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">laioncoco_preprocessing</span><span class="p">:</span>
             <span class="n">datasets</span> <span class="o">=</span> <span class="n">preprocess_laioncoco</span><span class="p">(</span><span class="n">datasets</span><span class="p">,</span> <span class="n">num_proc</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">blip3o_preprocessing</span><span class="p">:</span>
+            <span class="n">datasets</span> <span class="o">=</span> <span class="n">preprocess_blip3o</span><span class="p">(</span><span class="n">datasets</span><span class="p">,</span> <span class="n">num_proc</span><span class="p">)</span>
         <span class="n">ds</span> <span class="o">=</span> <span class="n">unify_format</span><span class="p">(</span><span class="n">datasets</span><span class="p">,</span> <span class="n">text_keys</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">text_keys</span><span class="p">,</span> <span class="n">num_proc</span><span class="o">=</span><span class="n">num_proc</span><span class="p">,</span> <span class="n">global_cfg</span><span class="o">=</span><span class="n">global_cfg</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">ds</span></div>
 </div>
@@ -734,6 +740,67 @@
     <span class="n">cols_to_remove</span> <span class="o">=</span> <span class="p">[</span>
         <span class="n">col</span>
         <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;clean_content&quot;</span><span class="p">,</span> <span class="s2">&quot;image_buffer_list&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">dataset</span><span class="o">.</span><span class="n">column_names</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="n">cols_to_remove</span><span class="p">:</span>
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">remove_columns</span><span class="p">(</span><span class="n">cols_to_remove</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">NestedDataset</span><span class="p">):</span>
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">NestedDataset</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">dataset</span></div>
+
+
+
+<div class="viewcode-block" id="preprocess_blip3o">
+<a class="viewcode-back" href="../../../api/data_juicer.format.formatter.html#data_juicer.format.preprocess_blip3o">[文档]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">preprocess_blip3o</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">num_proc</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Preprocess BLIP3o WebDataset format dataset.</span>
+
+<span class="sd">    Transforms the BLIP3o WebDataset schema into the format</span>
+<span class="sd">    expected by Data-Juicer:</span>
+<span class="sd">    - Converts &#39;jpg&#39; (PIL Image) to &#39;image_bytes&#39; (raw JPEG bytes) and</span>
+<span class="sd">      creates &#39;images&#39; (synthetic IDs derived from __key__)</span>
+<span class="sd">    - Renames &#39;txt&#39; to &#39;text&#39;, prepended with image special token</span>
+
+<span class="sd">    :param dataset: a NestedDataset with BLIP3o WebDataset schema</span>
+<span class="sd">    :param num_proc: number of processes for mapping</span>
+<span class="sd">    :return: transformed NestedDataset</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">io</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.core.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">NestedDataset</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.mm_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpecialTokens</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Applying BLIP3o WebDataset preprocessing...&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">transform</span><span class="p">(</span><span class="n">sample</span><span class="p">):</span>
+        <span class="c1"># Convert PIL image to bytes</span>
+        <span class="n">img</span> <span class="o">=</span> <span class="n">sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;jpg&quot;</span><span class="p">)</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="n">sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;__key__&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">img</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">buf</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">()</span>
+            <span class="n">img</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">buf</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;JPEG&quot;</span><span class="p">)</span>
+            <span class="n">sample</span><span class="p">[</span><span class="s2">&quot;image_bytes&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">buf</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()]</span>
+            <span class="n">sample</span><span class="p">[</span><span class="s2">&quot;images&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">.jpg&quot;</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sample</span><span class="p">[</span><span class="s2">&quot;image_bytes&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">sample</span><span class="p">[</span><span class="s2">&quot;images&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c1"># Build text with image special token</span>
+        <span class="n">txt</span> <span class="o">=</span> <span class="n">sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;txt&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">sample</span><span class="p">[</span><span class="s2">&quot;text&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">SpecialTokens</span><span class="o">.</span><span class="n">image</span> <span class="o">+</span> <span class="n">txt</span>
+
+        <span class="k">return</span> <span class="n">sample</span>
+
+    <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">map</span><span class="p">(</span>
+        <span class="n">transform</span><span class="p">,</span> <span class="n">num_proc</span><span class="o">=</span><span class="n">num_proc</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="s2">&quot;BLIP3o preprocessing&quot;</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Remove original webdataset columns</span>
+    <span class="n">cols_to_remove</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">col</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;jpg&quot;</span><span class="p">,</span> <span class="s2">&quot;txt&quot;</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">dataset</span><span class="o">.</span><span class="n">column_names</span>
     <span class="p">]</span>
     <span class="k">if</span> <span class="n">cols_to_remove</span><span class="p">:</span>
