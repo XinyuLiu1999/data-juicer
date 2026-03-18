@@ -10,6 +10,7 @@ def load_formatter(
     suffixes=None,
     add_suffix=False,
     laioncoco_preprocessing=False,
+    blip3o_preprocessing=False,
     **kwargs,
 ) -> BaseFormatter:
     """
@@ -23,6 +24,8 @@ def load_formatter(
     :param add_suffix: whether to add the file suffix to dataset meta.
         Default: False
     :param laioncoco_preprocessing: whether to apply LAION-COCO format
+        preprocessing. Default: False
+    :param blip3o_preprocessing: whether to apply BLIP3o WebDataset format
         preprocessing. Default: False
     :return: a dataset formatter.
     """
@@ -59,6 +62,7 @@ def load_formatter(
             suffixes=target_suffixes,
             add_suffix=add_suffix,
             laioncoco_preprocessing=laioncoco_preprocessing,
+            blip3o_preprocessing=blip3o_preprocessing,
             **kwargs,
         )
 

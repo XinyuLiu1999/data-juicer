@@ -345,6 +345,7 @@ class DefaultLocalDataLoadStrategy(DefaultDataLoadStrategy):
                 break
         load_data_np = kwargs.get("num_proc", 1)
         laioncoco_preprocessing = getattr(self.cfg, "laioncoco_preprocessing", False)
+        blip3o_preprocessing = getattr(self.cfg, "blip3o_preprocessing", False)
 
         # use proper formatter to load data
         formatter = load_formatter(
@@ -353,6 +354,7 @@ class DefaultLocalDataLoadStrategy(DefaultDataLoadStrategy):
             suffixes=suffixes,
             add_suffix=add_suffix,
             laioncoco_preprocessing=laioncoco_preprocessing,
+            blip3o_preprocessing=blip3o_preprocessing,
             **kwargs,
         )
         # TODO more sophiscated localformatter routing

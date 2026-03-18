@@ -5,6 +5,7 @@ from .json_formatter import JsonFormatter
 from .parquet_formatter import ParquetFormatter
 from .text_formatter import TextFormatter
 from .tsv_formatter import TsvFormatter
+from .webdataset_formatter import WebDatasetFormatter
 
 __all__ = [
     "JsonFormatter",
@@ -14,6 +15,7 @@ __all__ = [
     "ParquetFormatter",
     "CsvFormatter",
     "TsvFormatter",
+    "WebDatasetFormatter",
     "EmptyFormatter",
     "RayEmptyFormatter",
 ]

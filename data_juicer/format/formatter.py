@@ -31,6 +31,7 @@ class LocalFormatter(BaseFormatter):
         text_keys: List[str] = None,
         add_suffix=False,
         laioncoco_preprocessing=False,
+        blip3o_preprocessing=False,
         **kwargs,
     ):
         """
@@ -46,6 +47,8 @@ class LocalFormatter(BaseFormatter):
             meta info
         :param laioncoco_preprocessing: whether to apply LAION-COCO
             format preprocessing
+        :param blip3o_preprocessing: whether to apply BLIP3o WebDataset
+            format preprocessing
         :param kwargs: extra args
         """
         self.type = type
@@ -54,6 +57,7 @@ class LocalFormatter(BaseFormatter):
         self.data_files = find_files_with_suffix(dataset_path, suffixes)
         self.add_suffix = add_suffix
         self.laioncoco_preprocessing = laioncoco_preprocessing
+        self.blip3o_preprocessing = blip3o_preprocessing
 
     def load_dataset(self, num_proc: Optional[int] = None, global_cfg=None) -> Dataset:
         """
@@ -82,6 +86,8 @@ class LocalFormatter(BaseFormatter):
             datasets = NestedDataset(concatenate_datasets([ds for _, ds in datasets.items()]))
         if self.laioncoco_preprocessing:
             datasets = preprocess_laioncoco(datasets, num_proc)
+        if self.blip3o_preprocessing:
+            datasets = preprocess_blip3o(datasets, num_proc)
         ds = unify_format(datasets, text_keys=self.text_keys, num_proc=num_proc, global_cfg=global_cfg)
         return ds
 
@@ -190,6 +196,64 @@ def preprocess_laioncoco(dataset, num_proc=1):
     cols_to_remove = [
         col
         for col in ["clean_content", "image_buffer_list"]
+        if col in dataset.column_names
+    ]
+    if cols_to_remove:
+        dataset = dataset.remove_columns(cols_to_remove)
+
+    if not isinstance(dataset, NestedDataset):
+        dataset = NestedDataset(dataset)
+    return dataset
+
+
+def preprocess_blip3o(dataset, num_proc=1):
+    """
+    Preprocess BLIP3o WebDataset format dataset.
+
+    Transforms the BLIP3o WebDataset schema into the format
+    expected by Data-Juicer:
+    - Converts 'jpg' (PIL Image) to 'image_bytes' (raw JPEG bytes) and
+      creates 'images' (synthetic IDs derived from __key__)
+    - Renames 'txt' to 'text', prepended with image special token
+
+    :param dataset: a NestedDataset with BLIP3o WebDataset schema
+    :param num_proc: number of processes for mapping
+    :return: transformed NestedDataset
+    """
+    import io
+
+    from data_juicer.core.data import NestedDataset
+    from data_juicer.utils.mm_utils import SpecialTokens
+
+    logger.info("Applying BLIP3o WebDataset preprocessing...")
+
+    def transform(sample):
+        # Convert PIL image to bytes
+        img = sample.get("jpg")
+        key = sample.get("__key__", "unknown")
+        if img is not None:
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG")
+            sample["image_bytes"] = [buf.getvalue()]
+            sample["images"] = [f"{key}.jpg"]
+        else:
+            sample["image_bytes"] = []
+            sample["images"] = []
+
+        # Build text with image special token
+        txt = sample.get("txt", "") or ""
+        sample["text"] = SpecialTokens.image + txt
+
+        return sample
+
+    dataset = dataset.map(
+        transform, num_proc=num_proc, desc="BLIP3o preprocessing"
+    )
+
+    # Remove original webdataset columns
+    cols_to_remove = [
+        col
+        for col in ["jpg", "txt"]
         if col in dataset.column_names
     ]
     if cols_to_remove:
