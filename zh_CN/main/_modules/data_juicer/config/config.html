@@ -934,6 +934,28 @@
                 <span class="s2">&quot;Larger values amortize per-batch overhead but use more memory.&quot;</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+                <span class="s2">&quot;--blip3o_preprocessing&quot;</span><span class="p">,</span>
+                <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Enable BLIP3o WebDataset format preprocessing. When True, &quot;</span>  <span class="c1"># noqa: E251</span>
+                <span class="s2">&quot;converts &#39;jpg&#39; (PIL Image) to &#39;image_bytes&#39;, creates &#39;images&#39; &quot;</span>
+                <span class="s2">&quot;IDs from &#39;__key__&#39;, and renames &#39;txt&#39; to &#39;text&#39;.&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+                <span class="s2">&quot;--blip3o_preprocessing_num_cpus&quot;</span><span class="p">,</span>
+                <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
+                <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Number of CPUs per preprocessing task for BLIP3o format. &quot;</span>  <span class="c1"># noqa: E251</span>
+                <span class="s2">&quot;Lower values (e.g. 0.25) allow more concurrent tasks.&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+                <span class="s2">&quot;--blip3o_preprocessing_batch_size&quot;</span><span class="p">,</span>
+                <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+                <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Batch size for BLIP3o preprocessing map_batches. &quot;</span>  <span class="c1"># noqa: E251</span>
+                <span class="s2">&quot;Larger values amortize per-batch overhead but use more memory.&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
                 <span class="s2">&quot;--use_cache&quot;</span><span class="p">,</span>
                 <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
                 <span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>

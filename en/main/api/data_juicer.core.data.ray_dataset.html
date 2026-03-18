@@ -551,6 +551,19 @@ which is the main performance bottleneck for large tables.</p>
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="data_juicer.core.data.ray_dataset.preprocess_blip3o_ray">
+<span class="sig-prename descclassname"><span class="pre">data_juicer.core.data.ray_dataset.</span></span><span class="sig-name descname"><span class="pre">preprocess_blip3o_ray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_special_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Table</span></span></span><a class="reference internal" href="../_modules/data_juicer/core/data/ray_dataset.html#preprocess_blip3o_ray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.core.data.ray_dataset.preprocess_blip3o_ray" title="Link to this definition">#</a></dt>
+<dd><p>Ray-compatible BLIP3o WebDataset preprocessing operating on PyArrow tables.</p>
+<p>Transforms the BLIP3o WebDataset schema (columns: jpg, txt, __key__,
+__url__) into the standard Data-Juicer format:
+- Renames ‘txt’ to ‘text’, prepended with an image special token
+- Converts ‘jpg’ (PIL Image) to ‘image_bytes’ (raw JPEG bytes) and</p>
+<blockquote>
+<div><p>creates ‘images’ (synthetic IDs derived from __key__)</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="data_juicer.core.data.ray_dataset.preprocess_dataset">
 <span class="sig-prename descclassname"><span class="pre">data_juicer.core.data.ray_dataset.</span></span><span class="sig-name descname"><span class="pre">preprocess_dataset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dataset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data_juicer/core/data/ray_dataset.html#preprocess_dataset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.core.data.ray_dataset.preprocess_dataset" title="Link to this definition">#</a></dt>
 <dd><p>Preprocess dataset and return (dataset, cached_columns).</p>
@@ -702,6 +715,7 @@ assertion errors.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.convert_to_absolute_paths"><code class="docutils literal notranslate"><span class="pre">convert_to_absolute_paths()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.set_dataset_to_absolute_path"><code class="docutils literal notranslate"><span class="pre">set_dataset_to_absolute_path()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_laioncoco_ray"><code class="docutils literal notranslate"><span class="pre">preprocess_laioncoco_ray()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_blip3o_ray"><code class="docutils literal notranslate"><span class="pre">preprocess_blip3o_ray()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_dataset"><code class="docutils literal notranslate"><span class="pre">preprocess_dataset()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.filter_batch"><code class="docutils literal notranslate"><span class="pre">filter_batch()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.RayDataset"><code class="docutils literal notranslate"><span class="pre">RayDataset</span></code></a><ul class="nav section-nav flex-column">

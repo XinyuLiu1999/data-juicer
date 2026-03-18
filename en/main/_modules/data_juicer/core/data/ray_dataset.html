@@ -720,6 +720,70 @@
 
 
 
+<div class="viewcode-block" id="preprocess_blip3o_ray">
+<a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.preprocess_blip3o_ray">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">preprocess_blip3o_ray</span><span class="p">(</span><span class="n">table</span><span class="p">:</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">Table</span><span class="p">,</span> <span class="n">image_special_token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">Table</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Ray-compatible BLIP3o WebDataset preprocessing operating on PyArrow tables.</span>
+
+<span class="sd">    Transforms the BLIP3o WebDataset schema (columns: jpg, txt, __key__,</span>
+<span class="sd">    __url__) into the standard Data-Juicer format:</span>
+<span class="sd">    - Renames &#39;txt&#39; to &#39;text&#39;, prepended with an image special token</span>
+<span class="sd">    - Converts &#39;jpg&#39; (PIL Image) to &#39;image_bytes&#39; (raw JPEG bytes) and</span>
+<span class="sd">      creates &#39;images&#39; (synthetic IDs derived from __key__)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">io</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_io</span>
+
+    <span class="n">num_rows</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">num_rows</span>
+
+    <span class="c1"># --- Convert PIL images from &#39;jpg&#39; column to bytes ---</span>
+    <span class="n">jpg_col</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">column</span><span class="p">(</span><span class="s2">&quot;jpg&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to_pylist</span><span class="p">()</span>
+    <span class="n">key_col</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">column</span><span class="p">(</span><span class="s2">&quot;__key__&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to_pylist</span><span class="p">()</span>
+
+    <span class="n">image_ids</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">image_bytes_list</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_rows</span><span class="p">):</span>
+        <span class="n">img</span> <span class="o">=</span> <span class="n">jpg_col</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="n">key_col</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">key_col</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">img</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">buf</span> <span class="o">=</span> <span class="n">_io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">()</span>
+            <span class="n">img</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">buf</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;JPEG&quot;</span><span class="p">)</span>
+            <span class="n">image_bytes_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">buf</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
+            <span class="n">image_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">.jpg&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">image_bytes_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+            <span class="n">image_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+
+    <span class="c1"># Wrap each value in a single-element list (Data-Juicer expects lists)</span>
+    <span class="n">images_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+        <span class="p">[[</span><span class="n">iid</span><span class="p">]</span> <span class="k">if</span> <span class="n">iid</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">[]</span> <span class="k">for</span> <span class="n">iid</span> <span class="ow">in</span> <span class="n">image_ids</span><span class="p">],</span>
+        <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">list_</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">()),</span>
+    <span class="p">)</span>
+    <span class="n">image_bytes_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+        <span class="p">[[</span><span class="n">ib</span><span class="p">]</span> <span class="k">if</span> <span class="n">ib</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">[]</span> <span class="k">for</span> <span class="n">ib</span> <span class="ow">in</span> <span class="n">image_bytes_list</span><span class="p">],</span>
+        <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">list_</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">binary</span><span class="p">()),</span>
+    <span class="p">)</span>
+
+    <span class="c1"># --- Build text column from &#39;txt&#39;, prepend image special token ---</span>
+    <span class="n">txt_col</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">column</span><span class="p">(</span><span class="s2">&quot;txt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to_pylist</span><span class="p">()</span>
+    <span class="n">text_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+        <span class="p">(</span><span class="n">image_special_token</span> <span class="o">+</span> <span class="p">(</span><span class="n">t</span> <span class="k">if</span> <span class="n">t</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">txt_col</span>
+    <span class="p">])</span>
+
+    <span class="c1"># --- Build output table, dropping original webdataset columns ---</span>
+    <span class="n">cols_to_drop</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;jpg&quot;</span><span class="p">,</span> <span class="s2">&quot;txt&quot;</span><span class="p">}</span>
+    <span class="n">cols_to_keep</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">table</span><span class="o">.</span><span class="n">column_names</span>
+                    <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">cols_to_drop</span><span class="p">]</span>
+    <span class="n">out_table</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">cols_to_keep</span><span class="p">)</span>
+    <span class="n">out_table</span> <span class="o">=</span> <span class="n">out_table</span><span class="o">.</span><span class="n">append_column</span><span class="p">(</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="n">text_col</span><span class="p">)</span>
+    <span class="n">out_table</span> <span class="o">=</span> <span class="n">out_table</span><span class="o">.</span><span class="n">append_column</span><span class="p">(</span><span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="n">images_col</span><span class="p">)</span>
+    <span class="n">out_table</span> <span class="o">=</span> <span class="n">out_table</span><span class="o">.</span><span class="n">append_column</span><span class="p">(</span><span class="s2">&quot;image_bytes&quot;</span><span class="p">,</span> <span class="n">image_bytes_col</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">out_table</span></div>
+
+
+
 <div class="viewcode-block" id="preprocess_dataset">
 <a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.preprocess_dataset">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">preprocess_dataset</span><span class="p">(</span><span class="n">dataset</span><span class="p">:</span> <span class="n">ray</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Dataset</span><span class="p">,</span> <span class="n">dataset_path</span><span class="p">,</span> <span class="n">cfg</span><span class="p">):</span>
@@ -767,6 +831,37 @@
             <span class="n">columns</span><span class="o">.</span><span class="n">update</span><span class="p">([</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="s2">&quot;image_bytes&quot;</span><span class="p">])</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;LAION-COCO preprocessing already applied, skipping.&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">cfg</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;blip3o_preprocessing&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+        <span class="c1"># Skip if preprocessing was already applied (jpg column removed)</span>
+        <span class="k">if</span> <span class="s2">&quot;jpg&quot;</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.mm_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpecialTokens</span>
+
+            <span class="n">preprocessing_num_cpus</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+                <span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;blip3o_preprocessing_num_cpus&quot;</span><span class="p">,</span> <span class="mf">0.25</span>
+            <span class="p">)</span>
+            <span class="n">preprocessing_batch_size</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+                <span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;blip3o_preprocessing_batch_size&quot;</span><span class="p">,</span>
+                <span class="n">DEFAULT_BATCH_SIZE</span>
+            <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Applying BLIP3o WebDataset preprocessing for Ray dataset &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;(num_cpus=</span><span class="si">{</span><span class="n">preprocessing_num_cpus</span><span class="si">}</span><span class="s2">, &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;batch_size=</span><span class="si">{</span><span class="n">preprocessing_batch_size</span><span class="si">}</span><span class="s2">)...&quot;</span>
+            <span class="p">)</span>
+            <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">map_batches</span><span class="p">(</span>
+                <span class="n">partial</span><span class="p">(</span><span class="n">preprocess_blip3o_ray</span><span class="p">,</span>
+                        <span class="n">image_special_token</span><span class="o">=</span><span class="n">SpecialTokens</span><span class="o">.</span><span class="n">image</span><span class="p">),</span>
+                <span class="n">batch_format</span><span class="o">=</span><span class="s2">&quot;pyarrow&quot;</span><span class="p">,</span>
+                <span class="n">batch_size</span><span class="o">=</span><span class="n">preprocessing_batch_size</span><span class="p">,</span>
+                <span class="n">num_cpus</span><span class="o">=</span><span class="n">preprocessing_num_cpus</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="c1"># Update columns to reflect blip3o preprocessing changes</span>
+            <span class="n">columns</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="s2">&quot;jpg&quot;</span><span class="p">)</span>
+            <span class="n">columns</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="s2">&quot;txt&quot;</span><span class="p">)</span>
+            <span class="n">columns</span><span class="o">.</span><span class="n">update</span><span class="p">([</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="s2">&quot;image_bytes&quot;</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;BLIP3o preprocessing already applied, skipping.&quot;</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">columns</span></div>
 
