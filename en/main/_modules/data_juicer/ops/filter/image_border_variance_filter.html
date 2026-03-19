@@ -884,12 +884,12 @@
 <a class="viewcode-back" href="../../../../api/data_juicer.ops.filter.image_border_variance_filter.html#data_juicer.ops.filter.ImageBorderVarianceFilter.__init__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
                  <span class="n">border_ratio</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
-                 <span class="n">variance_threshold</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+                 <span class="n">variance_threshold</span><span class="o">=</span><span class="mi">35</span><span class="p">,</span>
                  <span class="n">uniformity_threshold</span><span class="o">=</span><span class="mf">0.85</span><span class="p">,</span>
                  <span class="n">light_bg_threshold</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>
                  <span class="n">neutral_max_spread</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
-                 <span class="n">dark_threshold</span><span class="o">=</span><span class="mi">80</span><span class="p">,</span>
-                 <span class="n">light_threshold</span><span class="o">=</span><span class="mi">220</span><span class="p">,</span>
+                 <span class="n">dark_threshold</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+                 <span class="n">light_threshold</span><span class="o">=</span><span class="mi">245</span><span class="p">,</span>
                  <span class="n">bar_ratio_threshold</span><span class="o">=</span><span class="mf">0.90</span><span class="p">,</span>
                  <span class="n">edge_brightness_threshold</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
                  <span class="n">uniformity_contrast_threshold</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
@@ -905,7 +905,7 @@
 <span class="sd">                default border strip.  Default ``0.05`` (5 %).</span>
 <span class="sd">            variance_threshold (float): Max mean per-channel variance for</span>
 <span class="sd">                a border to be considered &quot;uniform&quot;.  Lower → stricter.</span>
-<span class="sd">                Default ``50``.</span>
+<span class="sd">                Default ``35``.</span>
 <span class="sd">            uniformity_threshold (float): Min fraction of border pixels</span>
 <span class="sd">                within 30 units of the mean colour.  Default ``0.85``.</span>
 <span class="sd">            light_bg_threshold (float): Min mean brightness (0–255) for a</span>
@@ -913,9 +913,9 @@
 <span class="sd">            neutral_max_spread (float): Max R/G/B spread to count as a</span>
 <span class="sd">                neutral (grey / white) colour.  Default ``15``.</span>
 <span class="sd">            dark_threshold (float): Max mean brightness for a pixel to be</span>
-<span class="sd">                counted as &quot;dark&quot;.  Default ``80``.</span>
+<span class="sd">                counted as &quot;dark&quot;.  Default ``10``.</span>
 <span class="sd">            light_threshold (float): Min mean brightness for a pixel to be</span>
-<span class="sd">                counted as &quot;light&quot;.  Default ``220``.</span>
+<span class="sd">                counted as &quot;light&quot;.  Default ``245``.</span>
 <span class="sd">            bar_ratio_threshold (float): Min fraction of dark/light pixels</span>
 <span class="sd">                in a strip to flag it as a bar.  Default ``0.90``.</span>
 <span class="sd">            edge_brightness_threshold (float): Min row-to-row brightness</span>
