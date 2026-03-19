@@ -300,6 +300,8 @@ class ImageMinHashActor:
 
         if use_bytes:
             image_bytes_list = samples[image_bytes_key]
+            if isinstance(image_bytes_list[0], list):
+                image_bytes_list = [item[0] for item in image_bytes_list]
             batch_data = [np.frombuffer(img_bytes, dtype=np.uint8) for img_bytes in image_bytes_list]
             logger.info(f"Loading with image bytes")
         else:
