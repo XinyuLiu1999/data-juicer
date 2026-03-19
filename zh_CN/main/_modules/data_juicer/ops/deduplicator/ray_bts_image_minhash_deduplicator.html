@@ -892,6 +892,8 @@
 
         <span class="k">if</span> <span class="n">use_bytes</span><span class="p">:</span>
             <span class="n">image_bytes_list</span> <span class="o">=</span> <span class="n">samples</span><span class="p">[</span><span class="n">image_bytes_key</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">image_bytes_list</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">image_bytes_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">image_bytes_list</span><span class="p">]</span>
             <span class="n">batch_data</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">frombuffer</span><span class="p">(</span><span class="n">img_bytes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span> <span class="k">for</span> <span class="n">img_bytes</span> <span class="ow">in</span> <span class="n">image_bytes_list</span><span class="p">]</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loading with image bytes&quot;</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
