@@ -363,12 +363,12 @@ class ImageBorderVarianceFilter(Filter):
 
     def __init__(self,
                  border_ratio=0.05,
-                 variance_threshold=50,
+                 variance_threshold=35,
                  uniformity_threshold=0.85,
                  light_bg_threshold=200,
                  neutral_max_spread=15,
-                 dark_threshold=80,
-                 light_threshold=220,
+                 dark_threshold=10,
+                 light_threshold=245,
                  bar_ratio_threshold=0.90,
                  edge_brightness_threshold=30,
                  uniformity_contrast_threshold=3.0,
@@ -384,7 +384,7 @@ class ImageBorderVarianceFilter(Filter):
                 default border strip.  Default ``0.05`` (5 %).
             variance_threshold (float): Max mean per-channel variance for
                 a border to be considered "uniform".  Lower → stricter.
-                Default ``50``.
+                Default ``35``.
             uniformity_threshold (float): Min fraction of border pixels
                 within 30 units of the mean colour.  Default ``0.85``.
             light_bg_threshold (float): Min mean brightness (0–255) for a
@@ -392,9 +392,9 @@ class ImageBorderVarianceFilter(Filter):
             neutral_max_spread (float): Max R/G/B spread to count as a
                 neutral (grey / white) colour.  Default ``15``.
             dark_threshold (float): Max mean brightness for a pixel to be
-                counted as "dark".  Default ``80``.
+                counted as "dark".  Default ``10``.
             light_threshold (float): Min mean brightness for a pixel to be
-                counted as "light".  Default ``220``.
+                counted as "light".  Default ``245``.
             bar_ratio_threshold (float): Min fraction of dark/light pixels
                 in a strip to flag it as a bar.  Default ``0.90``.
             edge_brightness_threshold (float): Min row-to-row brightness
