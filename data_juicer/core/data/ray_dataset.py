@@ -587,7 +587,7 @@ class RayDataset(DJDataset):
 
     @classmethod
     def read(cls, data_format: str, paths: Union[str, List[str]], **kwargs) -> RayDataset:
-        if data_format in {"json", "jsonl"}:
+        if data_format in {"json", "jsonl", "json.gz", "jsonl.gz", "json.zst", "jsonl.zst"}:
             return RayDataset.read_json(paths)
         elif data_format == "webdataset":
             return RayDataset.read_webdataset(paths, **kwargs)
@@ -687,7 +687,7 @@ def read_json_stream(
     include_paths: bool = False,
     ignore_missing_paths: bool = False,
     shuffle: Union[Literal["files"], None] = None,
-    file_extensions: Optional[List[str]] = ["json", "jsonl"],
+    file_extensions: Optional[List[str]] = ["json", "jsonl", "json.gz", "jsonl.gz", "json.zst", "jsonl.zst"],
     concurrency: Optional[int] = None,
     override_num_blocks: Optional[int] = None,
     **arrow_json_args,
