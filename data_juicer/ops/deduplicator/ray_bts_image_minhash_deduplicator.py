@@ -279,9 +279,6 @@ class ImageMinHashActor:
         """
         import io
 
-        import nvidia.dali as dali
-        import nvidia.dali.fn as fn
-        import nvidia.dali.types as types
         import torch
         from PIL import Image, ImageFile
 
@@ -311,6 +308,10 @@ class ImageMinHashActor:
             logger.info(f"Loading with image paths")
 
         def _decode_image_with_dali():
+            import nvidia.dali as dali
+            import nvidia.dali.fn as fn
+            import nvidia.dali.types as types
+
             @dali.pipeline_def(
                 batch_size=len(batch_data),
                 num_threads=8,
@@ -768,7 +769,7 @@ class RayImageBTSMinhashDeduplicator(Deduplicator):
 
         from ray.data._internal.util import get_compute_strategy
 
-        compute = get_compute_strategy(ImageMinHashActor, concurrency=(int(concurrency) // 4, int(concurrency)))
+        compute = get_compute_strategy(ImageMinHashActor, concurrency=(max(1, int(concurrency) // 4), int(concurrency)))
         dataset = dataset.map_batches(
             ImageMinHashActor,
             fn_constructor_kwargs={
@@ -791,14 +792,14 @@ class RayImageBTSMinhashDeduplicator(Deduplicator):
         del dataset
         end_time = time.time()
         logger.info(f"MinHash time = {end_time - start_time}")
-        concurrency = int(ray.available_resources().get("CPU", 1) // 4)
+        concurrency = max(1, int(ray.available_resources().get("CPU", 1) // 4))
         new_dataset = ray.data.read_parquet(tmp_dir, concurrency=concurrency)
         start_time = time.time()
         self.merge()
         end_time = time.time()
         logger.info(f"merge time = {end_time - start_time}")
         start_time = time.time()
-        concurrency = int(ray.available_resources().get("CPU", 1) // 4)
+        concurrency = max(1, int(ray.available_resources().get("CPU", 1) // 4))
         compute = get_compute_strategy(self.filter_with_union_find, concurrency=concurrency)
         result = new_dataset.map_batches(
             self.filter_with_union_find,
@@ -870,7 +871,7 @@ class RayImageBTSMinhashDeduplicatorWithUid(RayImageBTSMinhashDeduplicator):
 
         from ray.data._internal.util import get_compute_strategy
 
-        compute = get_compute_strategy(ImageMinHashActor, concurrency=(int(concurrency) // 4, int(concurrency)))
+        compute = get_compute_strategy(ImageMinHashActor, concurrency=(max(1, int(concurrency) // 4), int(concurrency)))
         dataset = dataset.map_batches(
             ImageMinHashActor,
             fn_constructor_kwargs={
