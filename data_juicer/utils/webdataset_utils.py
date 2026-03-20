@@ -116,6 +116,10 @@ def _custom_default_decoder(sample: Dict[str, Any], format: Optional[Union[bool,
 def _encode_image(value, extension):
     from ray.data._internal.datasource.webdataset_datasource import extension_to_format
 
+    # Unwrap single-element lists (e.g. image_bytes from blip3o preprocessing)
+    if isinstance(value, list) and len(value) == 1:
+        value = value[0]
+
     if isinstance(value, np.ndarray):
         value = PIL.Image.fromarray(value)
     elif isinstance(value, bytes):
@@ -236,7 +240,8 @@ def _custom_default_encoder(sample: Dict[str, Any], format: Optional[Union[str, 
     return sample
 
 
-def reconstruct_custom_webdataset_format(samples, field_mapping: Optional[Dict[str, str]] = None):
+def reconstruct_custom_webdataset_format(samples, field_mapping: Optional[Dict[str, str]] = None,
+                                         strip_text_prefix: Optional[str] = None):
     """
     Reconstruct the original dataset to the WebDataset format.
     For all keys, they can be specified by `field_mapping` argument, which is a dict mapping from the target
@@ -244,6 +249,8 @@ def reconstruct_custom_webdataset_format(samples, field_mapping: Optional[Dict[s
 
     :param samples: the input samples batch to be reconstructed
     :param field_mapping: the field mapping to construct the left fields.
+    :param strip_text_prefix: if set, strip this prefix from text fields (e.g.
+        the image special token added during blip3o preprocessing).
     """
     if field_mapping is None:
         field_mapping = {}
@@ -261,5 +268,12 @@ def reconstruct_custom_webdataset_format(samples, field_mapping: Optional[Dict[s
             reconstructed_sample[tgt_field] = samples[src_field]
         elif isinstance(src_field, list):
             reconstructed_sample[tgt_field] = {src_field_item: samples[src_field_item] for src_field_item in src_field}
+
+    # Strip special token prefix from text fields if requested
+    if strip_text_prefix:
+        for tgt_field, value in reconstructed_sample.items():
+            ext = tgt_field.split(".")[-1]
+            if ext in ["txt", "text"] and isinstance(value, str) and value.startswith(strip_text_prefix):
+                reconstructed_sample[tgt_field] = value[len(strip_text_prefix):]
 
     return reconstructed_sample

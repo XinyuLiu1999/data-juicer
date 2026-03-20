@@ -226,8 +226,11 @@ class RayExporter:
         # check if we need to reconstruct the customized WebDataset format
         export_extra_args = kwargs.get("export_extra_args", {})
         field_mapping = export_extra_args.get("field_mapping", {})
+        strip_text_prefix = export_extra_args.get("strip_text_prefix", None)
         if len(field_mapping) > 0:
-            reconstruct_func = partial(reconstruct_custom_webdataset_format, field_mapping=field_mapping)
+            reconstruct_func = partial(reconstruct_custom_webdataset_format,
+                                       field_mapping=field_mapping,
+                                       strip_text_prefix=strip_text_prefix)
             dataset = dataset.map(reconstruct_func)
         filtered_kwargs = filter_arguments(dataset.write_webdataset, export_extra_args)
         # Add S3 filesystem if available
