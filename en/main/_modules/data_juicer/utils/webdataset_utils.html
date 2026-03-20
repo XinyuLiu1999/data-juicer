@@ -633,6 +633,10 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_encode_image</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">extension</span><span class="p">):</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">ray.data._internal.datasource.webdataset_datasource</span><span class="w"> </span><span class="kn">import</span> <span class="n">extension_to_format</span>
 
+    <span class="c1"># Unwrap single-element lists (e.g. image_bytes from blip3o preprocessing)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
         <span class="n">value</span> <span class="o">=</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">):</span>
@@ -755,7 +759,8 @@
 
 <div class="viewcode-block" id="reconstruct_custom_webdataset_format">
 <a class="viewcode-back" href="../../../api/data_juicer.utils.webdataset_utils.html#data_juicer.utils.webdataset_utils.reconstruct_custom_webdataset_format">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">reconstruct_custom_webdataset_format</span><span class="p">(</span><span class="n">samples</span><span class="p">,</span> <span class="n">field_mapping</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">reconstruct_custom_webdataset_format</span><span class="p">(</span><span class="n">samples</span><span class="p">,</span> <span class="n">field_mapping</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                                         <span class="n">strip_text_prefix</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Reconstruct the original dataset to the WebDataset format.</span>
 <span class="sd">    For all keys, they can be specified by `field_mapping` argument, which is a dict mapping from the target</span>
@@ -763,6 +768,8 @@
 
 <span class="sd">    :param samples: the input samples batch to be reconstructed</span>
 <span class="sd">    :param field_mapping: the field mapping to construct the left fields.</span>
+<span class="sd">    :param strip_text_prefix: if set, strip this prefix from text fields (e.g.</span>
+<span class="sd">        the image special token added during blip3o preprocessing).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">field_mapping</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">field_mapping</span> <span class="o">=</span> <span class="p">{}</span>
@@ -780,6 +787,13 @@
             <span class="n">reconstructed_sample</span><span class="p">[</span><span class="n">tgt_field</span><span class="p">]</span> <span class="o">=</span> <span class="n">samples</span><span class="p">[</span><span class="n">src_field</span><span class="p">]</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">src_field</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
             <span class="n">reconstructed_sample</span><span class="p">[</span><span class="n">tgt_field</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">src_field_item</span><span class="p">:</span> <span class="n">samples</span><span class="p">[</span><span class="n">src_field_item</span><span class="p">]</span> <span class="k">for</span> <span class="n">src_field_item</span> <span class="ow">in</span> <span class="n">src_field</span><span class="p">}</span>
+
+    <span class="c1"># Strip special token prefix from text fields if requested</span>
+    <span class="k">if</span> <span class="n">strip_text_prefix</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">tgt_field</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">reconstructed_sample</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">ext</span> <span class="o">=</span> <span class="n">tgt_field</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">ext</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;txt&quot;</span><span class="p">,</span> <span class="s2">&quot;text&quot;</span><span class="p">]</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">strip_text_prefix</span><span class="p">):</span>
+                <span class="n">reconstructed_sample</span><span class="p">[</span><span class="n">tgt_field</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">strip_text_prefix</span><span class="p">):]</span>
 
     <span class="k">return</span> <span class="n">reconstructed_sample</span></div>
 
