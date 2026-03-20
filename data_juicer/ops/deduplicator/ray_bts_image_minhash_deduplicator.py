@@ -414,14 +414,9 @@ class ImageMinHashActor:
         minhash, _ = hash_vals.min(dim=1)
         del hash_vals
         # Flatten and convert via cuDF
-        if self.use_cuda:
-            import cudf
-
-            minhash_flat = cudf.core.column.as_column(minhash.flatten()).to_arrow()
-        else:
-            minhash_np = minhash.cpu().numpy().astype(np.uint32)
-            minhash_flat = pa.array(minhash_np.flatten(), type=pa.uint32())
-            del minhash_np
+        minhash_np = minhash.cpu().numpy().astype(np.uint32)
+        minhash_flat = pa.array(minhash_np.flatten(), type=pa.uint32())
+        del minhash_np
         minhash_arrow = pa.FixedSizeListArray.from_arrays(minhash_flat, minhash.shape[1])
         del minhash
         return minhash_arrow
