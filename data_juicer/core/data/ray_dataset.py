@@ -621,7 +621,9 @@ class RayDataset(DJDataset):
     def read_webdataset(cls, paths: Union[str, List[str]], decoder=None) -> RayDataset:
         if decoder is None:
             decoder = partial(_custom_default_decoder, format="PIL")
-        return ray.data.read_webdataset(paths, decoder=decoder)
+        return ray.data.read_webdataset(
+            paths, decoder=decoder, file_extensions=["tar"]
+        )
 
     def to_list(self) -> list:
         return self.data.to_pandas().to_dict(orient="records")
