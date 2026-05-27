@@ -90,8 +90,9 @@ class MetaKeys(object):
 
     # # pose information
     pose_info = "pose_info"
-    # # OCR results
-    image_ocr_tag = "image_ocr_tag"
+    # # OCR results: region-grouped recognized text per image
+    image_ocr_text = "image_ocr_text"
+    # # OCR difficulty score per image (0.0 easy - 1.0 hard)
     image_ocr_difficulty = "image_ocr_difficulty"
     # # Static Camera Calibration Info (for DeepCalib)
     static_camera_calibration_deepcalib_tags = "static_camera_calibration_deepcalib_tags"
