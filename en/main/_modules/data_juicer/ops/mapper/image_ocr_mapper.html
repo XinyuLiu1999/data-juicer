@@ -526,20 +526,6 @@
 <span class="n">paddleocr</span> <span class="o">=</span> <span class="n">LazyLoader</span><span class="p">(</span><span class="s2">&quot;paddleocr&quot;</span><span class="p">)</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_to_serializable</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert numpy arrays and other non-serializable types to plain Python</span>
-<span class="sd">    types for JSON-compatible output.&quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">generic</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">_to_serializable</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">obj</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
-        <span class="k">return</span> <span class="p">[</span><span class="n">_to_serializable</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">obj</span><span class="p">]</span>
-    <span class="k">return</span> <span class="n">obj</span>
-
-
 <div class="viewcode-block" id="ImageOCRMapper">
 <a class="viewcode-back" href="../../../../api/data_juicer.ops.mapper.html#data_juicer.ops.mapper.ImageOCRMapper">[docs]</a>
 <span class="nd">@UNFORKABLE</span><span class="o">.</span><span class="n">register_module</span><span class="p">(</span><span class="n">OP_NAME</span><span class="p">)</span>
@@ -547,22 +533,29 @@
 <span class="nd">@OPERATORS</span><span class="o">.</span><span class="n">register_module</span><span class="p">(</span><span class="n">OP_NAME</span><span class="p">)</span>
 <span class="nd">@LOADED_IMAGES</span><span class="o">.</span><span class="n">register_module</span><span class="p">(</span><span class="n">OP_NAME</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">ImageOCRMapper</span><span class="p">(</span><span class="n">Mapper</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Perform OCR on images using PP-OCRv5 and store the results in metadata.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract text from images with PP-OCRv5 and store a region-grouped</span>
+<span class="sd">    string plus a difficulty score in metadata.</span>
 
-<span class="sd">    This operator uses PaddleOCR (PP-OCRv5) to detect and recognize text in</span>
-<span class="sd">    images. It processes each image in the sample and stores the full OCR</span>
-<span class="sd">    results in the sample&#39;s metadata under the `image_ocr_tag` key, along</span>
-<span class="sd">    with an OCR difficulty score under the `image_ocr_difficulty` key.</span>
+<span class="sd">    For each image the mapper writes two entries under ``sample[Fields.meta]``:</span>
 
-<span class="sd">    Each OCR result is a dict containing keys such as: `dt_polys`,</span>
-<span class="sd">    `rec_texts`, `rec_scores`, `rec_polys`, `rec_boxes`,</span>
-<span class="sd">    `text_det_params`, `text_type`, `textline_orientation_angles`, etc.</span>
+<span class="sd">    - ``image_ocr_text``: a plain string with high-confidence text grouped</span>
+<span class="sd">      into ``top``/``middle``/``bottom`` thirds of the image (by box</span>
+<span class="sd">      y-center) and joined with &quot; | &quot;; regions are separated by newlines.</span>
+<span class="sd">      Boxes below ``conf_thresh`` are dropped. Empty regions are omitted;</span>
+<span class="sd">      an image with no high-confidence text becomes ``&quot;&quot;``.</span>
+<span class="sd">    - ``image_ocr_difficulty``: a float in ``[0.0, 1.0]`` averaging text</span>
+<span class="sd">      density, box-count saturation, and low-confidence ratio (boxes below</span>
+<span class="sd">      ``low_conf_thresh``).</span>
 
-<span class="sd">    The difficulty score (0.0 to 1.0) is computed per image based on:</span>
-<span class="sd">    - Text density: fraction of image area covered by text bounding boxes.</span>
-<span class="sd">    - Number of boxes: more boxes indicate more complex layout.</span>
-<span class="sd">    - Low-confidence ratio: fraction of boxes with recognition confidence</span>
-<span class="sd">      below `low_conf_thresh`.</span>
+<span class="sd">    Example ``image_ocr_text`` output::</span>
+
+<span class="sd">        top: HEADLINE | SUBHEAD</span>
+<span class="sd">        middle: body text snippet</span>
+<span class="sd">        bottom: footer line</span>
+
+<span class="sd">    Both outputs are flat scalars / strings, sidestepping the PyArrow</span>
+<span class="sd">    schema-unification failures that the previous deeply-nested struct</span>
+<span class="sd">    output triggered when Ray Data concatenated heterogeneous batches.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">_accelerator</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span>
@@ -571,12 +564,13 @@
 <a class="viewcode-back" href="../../../../api/data_juicer.ops.mapper.html#data_juicer.ops.mapper.ImageOCRMapper.__init__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">lang</span><span class="o">=</span><span class="s2">&quot;en&quot;</span><span class="p">,</span>
+        <span class="n">lang</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="n">use_doc_orientation_classify</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">use_doc_unwarping</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">use_textline_orientation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">text_detection_model_name</span><span class="o">=</span><span class="s2">&quot;PP-OCRv5_server_det&quot;</span><span class="p">,</span>
         <span class="n">text_recognition_model_name</span><span class="o">=</span><span class="s2">&quot;PP-OCRv5_server_rec&quot;</span><span class="p">,</span>
+        <span class="n">conf_thresh</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
         <span class="n">low_conf_thresh</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
         <span class="o">*</span><span class="n">args</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
@@ -584,15 +578,22 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Initialization method.</span>
 
-<span class="sd">        :param lang: language for OCR recognition (e.g. &#39;en&#39;, &#39;ch&#39;).</span>
+<span class="sd">        :param lang: language for OCR recognition. ``None`` (default) uses</span>
+<span class="sd">            PP-OCRv5&#39;s built-in multilingual recognizer (CN/EN/JP/pinyin).</span>
+<span class="sd">            Set to e.g. ``&#39;en&#39;`` or ``&#39;ch&#39;`` to force a language-specific</span>
+<span class="sd">            recognizer.</span>
 <span class="sd">        :param use_doc_orientation_classify: whether to use document</span>
 <span class="sd">            orientation classification.</span>
 <span class="sd">        :param use_doc_unwarping: whether to use document unwarping.</span>
 <span class="sd">        :param use_textline_orientation: whether to use textline orientation.</span>
 <span class="sd">        :param text_detection_model_name: name of the text detection model.</span>
-<span class="sd">        :param text_recognition_model_name: name of the text recognition model.</span>
+<span class="sd">        :param text_recognition_model_name: name of the text recognition</span>
+<span class="sd">            model.</span>
+<span class="sd">        :param conf_thresh: drop recognized boxes with confidence below</span>
+<span class="sd">            this value before grouping into top/middle/bottom regions.</span>
 <span class="sd">        :param low_conf_thresh: confidence threshold below which a text box</span>
-<span class="sd">            is considered low-confidence for difficulty calculation.</span>
+<span class="sd">            counts as &quot;low-confidence&quot; in the difficulty score (separate</span>
+<span class="sd">            from ``conf_thresh`` which gates the text output).</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;memory&quot;</span><span class="p">,</span> <span class="s2">&quot;2GB&quot;</span><span class="p">)</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
@@ -603,6 +604,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">use_textline_orientation</span> <span class="o">=</span> <span class="n">use_textline_orientation</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">text_detection_model_name</span> <span class="o">=</span> <span class="n">text_detection_model_name</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">text_recognition_model_name</span> <span class="o">=</span> <span class="n">text_recognition_model_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conf_thresh</span> <span class="o">=</span> <span class="n">conf_thresh</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">low_conf_thresh</span> <span class="o">=</span> <span class="n">low_conf_thresh</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_model</span> <span class="o">=</span> <span class="kc">None</span></div>
 
@@ -612,8 +614,7 @@
             <span class="n">device</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_cuda</span><span class="p">():</span>
                 <span class="n">device</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;gpu:</span><span class="si">{</span><span class="n">rank</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">rank</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;gpu:0&quot;</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_model</span> <span class="o">=</span> <span class="n">paddleocr</span><span class="o">.</span><span class="n">PaddleOCR</span><span class="p">(</span>
-                <span class="n">lang</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">lang</span><span class="p">,</span>
+            <span class="n">kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
                 <span class="n">use_doc_orientation_classify</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">use_doc_orientation_classify</span><span class="p">,</span>
                 <span class="n">use_doc_unwarping</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">use_doc_unwarping</span><span class="p">,</span>
                 <span class="n">use_textline_orientation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">use_textline_orientation</span><span class="p">,</span>
@@ -621,44 +622,74 @@
                 <span class="n">text_recognition_model_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">text_recognition_model_name</span><span class="p">,</span>
                 <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
             <span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">lang</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;lang&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lang</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_model</span> <span class="o">=</span> <span class="n">paddleocr</span><span class="o">.</span><span class="n">PaddleOCR</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_compute_difficulty</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ocr_page_results</span><span class="p">,</span> <span class="n">image_width</span><span class="p">,</span> <span class="n">image_height</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_format_regions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">image_height</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Group recognized text by vertical thirds of the image.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">image_height</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="n">texts</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rec_texts&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">scores</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rec_scores&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">polys</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rec_polys&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+
+        <span class="n">regions</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;top&quot;</span><span class="p">:</span> <span class="p">[],</span> <span class="s2">&quot;middle&quot;</span><span class="p">:</span> <span class="p">[],</span> <span class="s2">&quot;bottom&quot;</span><span class="p">:</span> <span class="p">[]}</span>
+        <span class="k">for</span> <span class="n">text</span><span class="p">,</span> <span class="n">conf</span><span class="p">,</span> <span class="n">poly</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">texts</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="n">polys</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">conf</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">conf</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">conf_thresh</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">poly</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">y_center</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">poly</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">poly</span><span class="p">)</span>
+            <span class="n">ratio</span> <span class="o">=</span> <span class="n">y_center</span> <span class="o">/</span> <span class="n">image_height</span>
+            <span class="k">if</span> <span class="n">ratio</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="o">/</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="n">region</span> <span class="o">=</span> <span class="s2">&quot;top&quot;</span>
+            <span class="k">elif</span> <span class="n">ratio</span> <span class="o">&lt;</span> <span class="mi">2</span> <span class="o">/</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="n">region</span> <span class="o">=</span> <span class="s2">&quot;middle&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">region</span> <span class="o">=</span> <span class="s2">&quot;bottom&quot;</span>
+            <span class="n">regions</span><span class="p">[</span><span class="n">region</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+
+        <span class="n">parts</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">region</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;top&quot;</span><span class="p">,</span> <span class="s2">&quot;middle&quot;</span><span class="p">,</span> <span class="s2">&quot;bottom&quot;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">regions</span><span class="p">[</span><span class="n">region</span><span class="p">]:</span>
+                <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">region</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="s1">&#39; | &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">regions</span><span class="p">[</span><span class="n">region</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_compute_difficulty</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">image_width</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">image_height</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Compute an OCR difficulty score (0.0-1.0) for a single image.</span>
 
-<span class="sd">        The score is the average of three components:</span>
-<span class="sd">        - text_density: fraction of image area covered by text bounding boxes,</span>
+<span class="sd">        Average of three components:</span>
+<span class="sd">        - text_density: fraction of image area covered by text boxes,</span>
 <span class="sd">          clamped to [0, 1].</span>
-<span class="sd">        - box_count_score: normalized number of text boxes</span>
-<span class="sd">          (n_boxes / (n_boxes + 10)), saturates toward 1 for many boxes.</span>
+<span class="sd">        - box_count_score: n_boxes / (n_boxes + 10), saturating toward 1.</span>
 <span class="sd">        - low_conf_ratio: fraction of boxes with confidence &lt; low_conf_thresh.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">image_area</span> <span class="o">=</span> <span class="n">image_width</span> <span class="o">*</span> <span class="n">image_height</span>
         <span class="k">if</span> <span class="n">image_area</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="k">return</span> <span class="mf">0.0</span>
 
-        <span class="n">all_boxes</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">all_scores</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">res</span> <span class="ow">in</span> <span class="n">ocr_page_results</span><span class="p">:</span>
-            <span class="n">all_boxes</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">res</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rec_boxes&quot;</span><span class="p">,</span> <span class="p">[]))</span>
-            <span class="n">all_scores</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">res</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rec_scores&quot;</span><span class="p">,</span> <span class="p">[]))</span>
-
-        <span class="n">n_boxes</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">all_boxes</span><span class="p">)</span>
+        <span class="n">boxes</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rec_boxes&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">scores</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rec_scores&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">n_boxes</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">boxes</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">n_boxes</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="k">return</span> <span class="mf">0.0</span>
 
-        <span class="c1"># text density: total box area / image area</span>
         <span class="n">total_box_area</span> <span class="o">=</span> <span class="mf">0.0</span>
-        <span class="k">for</span> <span class="n">box</span> <span class="ow">in</span> <span class="n">all_boxes</span><span class="p">:</span>
-            <span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">y2</span> <span class="o">=</span> <span class="n">box</span>
+        <span class="k">for</span> <span class="n">box</span> <span class="ow">in</span> <span class="n">boxes</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">box</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">box</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">4</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">y2</span> <span class="o">=</span> <span class="n">box</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">box</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">box</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">box</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
             <span class="n">total_box_area</span> <span class="o">+=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x2</span> <span class="o">-</span> <span class="n">x1</span><span class="p">)</span> <span class="o">*</span> <span class="nb">abs</span><span class="p">(</span><span class="n">y2</span> <span class="o">-</span> <span class="n">y1</span><span class="p">)</span>
         <span class="n">text_density</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">total_box_area</span> <span class="o">/</span> <span class="n">image_area</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
 
-        <span class="c1"># box count score: saturating function</span>
         <span class="n">box_count_score</span> <span class="o">=</span> <span class="n">n_boxes</span> <span class="o">/</span> <span class="p">(</span><span class="n">n_boxes</span> <span class="o">+</span> <span class="mf">10.0</span><span class="p">)</span>
 
-        <span class="c1"># low confidence ratio</span>
-        <span class="n">n_low_conf</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">all_scores</span> <span class="k">if</span> <span class="n">s</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">low_conf_thresh</span><span class="p">)</span>
+        <span class="n">n_low_conf</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span>
+            <span class="mi">1</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">scores</span> <span class="k">if</span> <span class="n">s</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">s</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">low_conf_thresh</span>
+        <span class="p">)</span>
         <span class="n">low_conf_ratio</span> <span class="o">=</span> <span class="n">n_low_conf</span> <span class="o">/</span> <span class="n">n_boxes</span>
 
         <span class="k">return</span> <span class="p">(</span><span class="n">text_density</span> <span class="o">+</span> <span class="n">box_count_score</span> <span class="o">+</span> <span class="n">low_conf_ratio</span><span class="p">)</span> <span class="o">/</span> <span class="mf">3.0</span>
@@ -667,11 +698,11 @@
 <a class="viewcode-back" href="../../../../api/data_juicer.ops.mapper.html#data_juicer.ops.mapper.ImageOCRMapper.process_single">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">process_single</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sample</span><span class="p">,</span> <span class="n">rank</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sample</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">sample</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">image_key</span><span class="p">]:</span>
-            <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">meta</span><span class="p">][</span><span class="n">MetaKeys</span><span class="o">.</span><span class="n">image_ocr_tag</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">meta</span><span class="p">][</span><span class="n">MetaKeys</span><span class="o">.</span><span class="n">image_ocr_text</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">meta</span><span class="p">][</span><span class="n">MetaKeys</span><span class="o">.</span><span class="n">image_ocr_difficulty</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">return</span> <span class="n">sample</span>
 
-        <span class="k">if</span> <span class="n">MetaKeys</span><span class="o">.</span><span class="n">image_ocr_tag</span> <span class="ow">in</span> <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">meta</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="n">MetaKeys</span><span class="o">.</span><span class="n">image_ocr_text</span> <span class="ow">in</span> <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">meta</span><span class="p">]:</span>
             <span class="k">return</span> <span class="n">sample</span>
 
         <span class="n">loaded_image_keys</span> <span class="o">=</span> <span class="n">sample</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">image_key</span><span class="p">]</span>
@@ -684,24 +715,29 @@
         <span class="p">)</span>
 
         <span class="n">model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_model</span><span class="p">(</span><span class="n">rank</span><span class="o">=</span><span class="n">rank</span><span class="p">)</span>
-        <span class="n">ocr_results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">ocr_texts</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">difficulty_scores</span> <span class="o">=</span> <span class="p">[]</span>
 
         <span class="k">for</span> <span class="n">image_key</span> <span class="ow">in</span> <span class="n">loaded_image_keys</span><span class="p">:</span>
             <span class="n">image</span> <span class="o">=</span> <span class="n">images</span><span class="p">[</span><span class="n">image_key</span><span class="p">]</span>
-            <span class="n">image_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
-            <span class="n">result</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">image_array</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">results</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">image</span><span class="p">))</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">ocr_texts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="n">difficulty_scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+                <span class="k">continue</span>
 
-            <span class="n">image_ocr</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">for</span> <span class="n">res</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
-                <span class="n">image_ocr</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_to_serializable</span><span class="p">(</span><span class="n">res</span><span class="p">))</span>
-            <span class="n">ocr_results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">image_ocr</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">results</span><span class="p">:</span>
+                <span class="n">ocr_texts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="n">difficulty_scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+                <span class="k">continue</span>
 
+            <span class="n">res</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
             <span class="n">w</span><span class="p">,</span> <span class="n">h</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span>
-            <span class="n">difficulty</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_difficulty</span><span class="p">(</span><span class="n">image_ocr</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span>
-            <span class="n">difficulty_scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">difficulty</span><span class="p">)</span>
+            <span class="n">ocr_texts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_format_regions</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="n">h</span><span class="p">))</span>
+            <span class="n">difficulty_scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_compute_difficulty</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">))</span>
 
-        <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">meta</span><span class="p">][</span><span class="n">MetaKeys</span><span class="o">.</span><span class="n">image_ocr_tag</span><span class="p">]</span> <span class="o">=</span> <span class="n">ocr_results</span>
+        <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">meta</span><span class="p">][</span><span class="n">MetaKeys</span><span class="o">.</span><span class="n">image_ocr_text</span><span class="p">]</span> <span class="o">=</span> <span class="n">ocr_texts</span>
         <span class="n">sample</span><span class="p">[</span><span class="n">Fields</span><span class="o">.</span><span class="n">meta</span><span class="p">][</span><span class="n">MetaKeys</span><span class="o">.</span><span class="n">image_ocr_difficulty</span><span class="p">]</span> <span class="o">=</span> <span class="n">difficulty_scores</span>
         <span class="k">return</span> <span class="n">sample</span></div>
 </div>

@@ -519,37 +519,51 @@
 <dt class="sig sig-object py" id="data_juicer.ops.mapper.image_ocr_mapper.ImageOCRMapper">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">data_juicer.ops.mapper.image_ocr_mapper.</span></span><span class="sig-name descname"><span class="pre">ImageOCRMapper</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data_juicer/ops/mapper/image_ocr_mapper.html#ImageOCRMapper"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.ops.mapper.image_ocr_mapper.ImageOCRMapper" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <a class="reference internal" href="data_juicer.ops.base_op.html#data_juicer.ops.base_op.Mapper" title="data_juicer.ops.base_op.Mapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">Mapper</span></code></a></p>
-<p>Perform OCR on images using PP-OCRv5 and store the results in metadata.</p>
-<p>This operator uses PaddleOCR (PP-OCRv5) to detect and recognize text in
-images. It processes each image in the sample and stores the full OCR
-results in the sample’s metadata under the <cite>image_ocr_tag</cite> key, along
-with an OCR difficulty score under the <cite>image_ocr_difficulty</cite> key.</p>
-<p>Each OCR result is a dict containing keys such as: <cite>dt_polys</cite>,
-<cite>rec_texts</cite>, <cite>rec_scores</cite>, <cite>rec_polys</cite>, <cite>rec_boxes</cite>,
-<cite>text_det_params</cite>, <cite>text_type</cite>, <cite>textline_orientation_angles</cite>, etc.</p>
-<p>The difficulty score (0.0 to 1.0) is computed per image based on:
-- Text density: fraction of image area covered by text bounding boxes.
-- Number of boxes: more boxes indicate more complex layout.
-- Low-confidence ratio: fraction of boxes with recognition confidence</p>
-<blockquote>
-<div><p>below <cite>low_conf_thresh</cite>.</p>
-</div></blockquote>
+<p>Extract text from images with PP-OCRv5 and store a region-grouped
+string plus a difficulty score in metadata.</p>
+<p>For each image the mapper writes two entries under <code class="docutils literal notranslate"><span class="pre">sample[Fields.meta]</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">image_ocr_text</span></code>: a plain string with high-confidence text grouped
+into <code class="docutils literal notranslate"><span class="pre">top</span></code>/<code class="docutils literal notranslate"><span class="pre">middle</span></code>/<code class="docutils literal notranslate"><span class="pre">bottom</span></code> thirds of the image (by box
+y-center) and joined with “ | “; regions are separated by newlines.
+Boxes below <code class="docutils literal notranslate"><span class="pre">conf_thresh</span></code> are dropped. Empty regions are omitted;
+an image with no high-confidence text becomes <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">image_ocr_difficulty</span></code>: a float in <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0]</span></code> averaging text
+density, box-count saturation, and low-confidence ratio (boxes below
+<code class="docutils literal notranslate"><span class="pre">low_conf_thresh</span></code>).</p></li>
+</ul>
+<p>Example <code class="docutils literal notranslate"><span class="pre">image_ocr_text</span></code> output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">top</span><span class="p">:</span> <span class="n">HEADLINE</span> <span class="o">|</span> <span class="n">SUBHEAD</span>
+<span class="n">middle</span><span class="p">:</span> <span class="n">body</span> <span class="n">text</span> <span class="n">snippet</span>
+<span class="n">bottom</span><span class="p">:</span> <span class="n">footer</span> <span class="n">line</span>
+</pre></div>
+</div>
+<p>Both outputs are flat scalars / strings, sidestepping the PyArrow
+schema-unification failures that the previous deeply-nested struct
+output triggered when Ray Data concatenated heterogeneous batches.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="data_juicer.ops.mapper.image_ocr_mapper.ImageOCRMapper.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lang</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'en'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_doc_orientation_classify</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_doc_unwarping</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_textline_orientation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">text_detection_model_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'PP-OCRv5_server_det'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">text_recognition_model_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'PP-OCRv5_server_rec'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">low_conf_thresh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data_juicer/ops/mapper/image_ocr_mapper.html#ImageOCRMapper.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.ops.mapper.image_ocr_mapper.ImageOCRMapper.__init__" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lang</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_doc_orientation_classify</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_doc_unwarping</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_textline_orientation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">text_detection_model_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'PP-OCRv5_server_det'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">text_recognition_model_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'PP-OCRv5_server_rec'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conf_thresh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">low_conf_thresh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data_juicer/ops/mapper/image_ocr_mapper.html#ImageOCRMapper.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.ops.mapper.image_ocr_mapper.ImageOCRMapper.__init__" title="Link to this definition">#</a></dt>
 <dd><p>Initialization method.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>lang</strong> – language for OCR recognition (e.g. ‘en’, ‘ch’).</p></li>
+<li><p><strong>lang</strong> – language for OCR recognition. <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) uses
+PP-OCRv5’s built-in multilingual recognizer (CN/EN/JP/pinyin).
+Set to e.g. <code class="docutils literal notranslate"><span class="pre">'en'</span></code> or <code class="docutils literal notranslate"><span class="pre">'ch'</span></code> to force a language-specific
+recognizer.</p></li>
 <li><p><strong>use_doc_orientation_classify</strong> – whether to use document
 orientation classification.</p></li>
 <li><p><strong>use_doc_unwarping</strong> – whether to use document unwarping.</p></li>
 <li><p><strong>use_textline_orientation</strong> – whether to use textline orientation.</p></li>
 <li><p><strong>text_detection_model_name</strong> – name of the text detection model.</p></li>
-<li><p><strong>text_recognition_model_name</strong> – name of the text recognition model.</p></li>
+<li><p><strong>text_recognition_model_name</strong> – name of the text recognition
+model.</p></li>
+<li><p><strong>conf_thresh</strong> – drop recognized boxes with confidence below
+this value before grouping into top/middle/bottom regions.</p></li>
 <li><p><strong>low_conf_thresh</strong> – confidence threshold below which a text box
-is considered low-confidence for difficulty calculation.</p></li>
+counts as “low-confidence” in the difficulty score (separate
+from <code class="docutils literal notranslate"><span class="pre">conf_thresh</span></code> which gates the text output).</p></li>
 </ul>
 </dd>
 </dl>
