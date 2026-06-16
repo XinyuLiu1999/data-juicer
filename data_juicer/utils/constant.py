@@ -94,6 +94,8 @@ class MetaKeys(object):
     image_ocr_text = "image_ocr_text"
     # # OCR difficulty score per image (0.0 easy - 1.0 hard)
     image_ocr_difficulty = "image_ocr_difficulty"
+    # # Raw per-box OCR output per image, JSON string (when save_raw=True)
+    image_ocr_raw = "image_ocr_raw"
     # # Static Camera Calibration Info (for DeepCalib)
     static_camera_calibration_deepcalib_tags = "static_camera_calibration_deepcalib_tags"
     # # Static Camera Calibration Info (for Moge-2)

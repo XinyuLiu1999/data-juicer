@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 
 from data_juicer.utils.constant import Fields, MetaKeys
@@ -10,6 +12,17 @@ from ..op_fusion import LOADED_IMAGES
 OP_NAME = "image_ocr_mapper"
 
 paddleocr = LazyLoader("paddleocr")
+
+
+def _as_seq(val):
+    """Return ``val`` as a sequence, mapping ``None`` to an empty list.
+
+    PaddleOCR returns some result fields (e.g. ``rec_polys``, ``rec_boxes``)
+    as numpy arrays, so the usual ``val or []`` idiom raises ValueError on the
+    array's ambiguous truth value. Testing only for ``None`` sidesteps that
+    while leaving lists and arrays untouched.
+    """
+    return [] if val is None else val
 
 
 @UNFORKABLE.register_module(OP_NAME)
@@ -54,6 +67,7 @@ class ImageOCRMapper(Mapper):
         text_recognition_model_name="PP-OCRv5_server_rec",
         conf_thresh=0.8,
         low_conf_thresh=0.5,
+        save_raw=False,
         *args,
         **kwargs,
     ):
@@ -76,6 +90,10 @@ class ImageOCRMapper(Mapper):
         :param low_conf_thresh: confidence threshold below which a text box
             counts as "low-confidence" in the difficulty score (separate
             from ``conf_thresh`` which gates the text output).
+        :param save_raw: if True, also store the raw per-box OCR output
+            (text/score/poly/box for every detected box, no confidence
+            filtering) as a JSON string per image under
+            ``MetaKeys.image_ocr_raw``. Off by default to keep exports small.
         """
         kwargs.setdefault("memory", "2GB")
         super().__init__(*args, **kwargs)
@@ -88,6 +106,7 @@ class ImageOCRMapper(Mapper):
         self.text_recognition_model_name = text_recognition_model_name
         self.conf_thresh = conf_thresh
         self.low_conf_thresh = low_conf_thresh
+        self.save_raw = save_raw
         self._model = None
 
     def _get_model(self, rank=None):
@@ -113,15 +132,15 @@ class ImageOCRMapper(Mapper):
         if image_height <= 0:
             return ""
 
-        texts = res.get("rec_texts") or []
-        scores = res.get("rec_scores") or []
-        polys = res.get("rec_polys") or []
+        texts = _as_seq(res.get("rec_texts"))
+        scores = _as_seq(res.get("rec_scores"))
+        polys = _as_seq(res.get("rec_polys"))
 
         regions = {"top": [], "middle": [], "bottom": []}
         for text, conf, poly in zip(texts, scores, polys):
             if conf is None or conf < self.conf_thresh:
                 continue
-            if not poly:
+            if poly is None or len(poly) == 0:
                 continue
             y_center = sum(p[1] for p in poly) / len(poly)
             ratio = y_center / image_height
@@ -139,6 +158,42 @@ class ImageOCRMapper(Mapper):
                 parts.append(f"{region}: {' | '.join(regions[region])}")
         return "\n".join(parts)
 
+    def _format_raw(self, res) -> str:
+        """Serialize the raw per-box OCR output to a JSON string.
+
+        One entry per detected box with ``text``/``score``/``poly``/``box``
+        (no confidence filtering). numpy arrays/scalars are converted to plain
+        Python types so the result is JSON- and parquet-safe.
+        """
+        texts = _as_seq(res.get("rec_texts"))
+        scores = _as_seq(res.get("rec_scores"))
+        polys = _as_seq(res.get("rec_polys"))
+        boxes = _as_seq(res.get("rec_boxes"))
+
+        def _conv(v):
+            if v is None:
+                return None
+            if isinstance(v, np.ndarray):
+                return v.tolist()
+            if isinstance(v, np.generic):
+                return v.item()
+            return v
+
+        n = max(len(texts), len(scores), len(polys), len(boxes))
+
+        def _at(seq, i):
+            return seq[i] if i < len(seq) else None
+
+        items = []
+        for i in range(n):
+            items.append({
+                "text": _conv(_at(texts, i)),
+                "score": _conv(_at(scores, i)),
+                "poly": _conv(_at(polys, i)),
+                "box": _conv(_at(boxes, i)),
+            })
+        return json.dumps(items, ensure_ascii=False)
+
     def _compute_difficulty(self, res, image_width: int, image_height: int) -> float:
         """Compute an OCR difficulty score (0.0-1.0) for a single image.
 
@@ -152,8 +207,8 @@ class ImageOCRMapper(Mapper):
         if image_area == 0:
             return 0.0
 
-        boxes = res.get("rec_boxes") or []
-        scores = res.get("rec_scores") or []
+        boxes = _as_seq(res.get("rec_boxes"))
+        scores = _as_seq(res.get("rec_scores"))
         n_boxes = len(boxes)
         if n_boxes == 0:
             return 0.0
@@ -162,7 +217,12 @@ class ImageOCRMapper(Mapper):
         for box in boxes:
             if box is None or len(box) < 4:
                 continue
-            x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
+            # Cast to Python float first: PaddleOCR returns box coords as a
+            # small numpy int dtype (e.g. int16), so width*height overflows
+            # within that dtype before reaching this float accumulator.
+            x1, y1, x2, y2 = (
+                float(box[0]), float(box[1]), float(box[2]), float(box[3])
+            )
             total_box_area += abs(x2 - x1) * abs(y2 - y1)
         text_density = min(total_box_area / image_area, 1.0)
 
@@ -179,6 +239,8 @@ class ImageOCRMapper(Mapper):
         if self.image_key not in sample or not sample[self.image_key]:
             sample[Fields.meta][MetaKeys.image_ocr_text] = []
             sample[Fields.meta][MetaKeys.image_ocr_difficulty] = []
+            if self.save_raw:
+                sample[Fields.meta][MetaKeys.image_ocr_raw] = []
             return sample
 
         if MetaKeys.image_ocr_text in sample[Fields.meta]:
@@ -196,6 +258,7 @@ class ImageOCRMapper(Mapper):
         model = self._get_model(rank=rank)
         ocr_texts = []
         difficulty_scores = []
+        raw_outputs = []
 
         for image_key in loaded_image_keys:
             image = images[image_key]
@@ -204,18 +267,26 @@ class ImageOCRMapper(Mapper):
             except Exception:
                 ocr_texts.append("")
                 difficulty_scores.append(0.0)
+                if self.save_raw:
+                    raw_outputs.append("[]")
                 continue
 
             if not results:
                 ocr_texts.append("")
                 difficulty_scores.append(0.0)
+                if self.save_raw:
+                    raw_outputs.append("[]")
                 continue
 
             res = results[0]
             w, h = image.size
             ocr_texts.append(self._format_regions(res, h))
             difficulty_scores.append(self._compute_difficulty(res, w, h))
+            if self.save_raw:
+                raw_outputs.append(self._format_raw(res))
 
         sample[Fields.meta][MetaKeys.image_ocr_text] = ocr_texts
         sample[Fields.meta][MetaKeys.image_ocr_difficulty] = difficulty_scores
+        if self.save_raw:
+            sample[Fields.meta][MetaKeys.image_ocr_raw] = raw_outputs
         return sample
