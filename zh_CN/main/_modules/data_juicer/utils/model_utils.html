@@ -1171,7 +1171,11 @@
                 <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;accelerate not found, using device directly&quot;</span><span class="p">)</span>
 
     <span class="n">pretrained_model_name_or_path</span> <span class="o">=</span> <span class="n">check_model_home</span><span class="p">(</span><span class="n">pretrained_model_name_or_path</span><span class="p">)</span>
-    <span class="n">processor</span> <span class="o">=</span> <span class="n">transformers</span><span class="o">.</span><span class="n">AutoProcessor</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">pretrained_model_name_or_path</span><span class="p">,</span> <span class="o">**</span><span class="n">model_params</span><span class="p">)</span>
+    <span class="c1"># use_fast=True selects the torchvision-backed fast image processor, which</span>
+    <span class="c1"># is much faster at resize/normalize than the slow (PIL) default.</span>
+    <span class="n">processor</span> <span class="o">=</span> <span class="n">transformers</span><span class="o">.</span><span class="n">AutoProcessor</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
+        <span class="n">pretrained_model_name_or_path</span><span class="p">,</span> <span class="n">use_fast</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">model_params</span>
+    <span class="p">)</span>
 
     <span class="k">if</span> <span class="n">return_model</span><span class="p">:</span>
         <span class="n">config</span> <span class="o">=</span> <span class="n">transformers</span><span class="o">.</span><span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">pretrained_model_name_or_path</span><span class="p">,</span> <span class="o">**</span><span class="n">model_params</span><span class="p">)</span>
@@ -1584,7 +1588,10 @@
                 <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;accelerate not found, using device directly&quot;</span><span class="p">)</span>
 
     <span class="n">pretrained_model_name_or_path</span> <span class="o">=</span> <span class="n">check_model_home</span><span class="p">(</span><span class="n">pretrained_model_name_or_path</span><span class="p">)</span>
-    <span class="n">processor</span> <span class="o">=</span> <span class="n">transformers</span><span class="o">.</span><span class="n">CLIPProcessor</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">pretrained_model_name_or_path</span><span class="p">,</span> <span class="o">**</span><span class="n">model_params</span><span class="p">)</span>
+    <span class="c1"># use_fast=True selects the torchvision-backed fast image processor.</span>
+    <span class="n">processor</span> <span class="o">=</span> <span class="n">transformers</span><span class="o">.</span><span class="n">CLIPProcessor</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
+        <span class="n">pretrained_model_name_or_path</span><span class="p">,</span> <span class="n">use_fast</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">model_params</span>
+    <span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">return_model</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">processor</span>
     <span class="k">else</span><span class="p">:</span>
