@@ -142,6 +142,17 @@ class RayExecutor(ExecutorBase, DAGExecutionMixin, EventLoggingMixin):
         :return: processed dataset.
         """
         # 1. load data
+        # Block-granularity tuning (perf): smaller Ray Data blocks => many more
+        # concurrent tasks, which fills CPUs and feeds the GPU actor pools.
+        # Opt-in via env DJ_TARGET_MAX_BLOCK_MIB (Ray default ~128 MiB is far too
+        # coarse for these multi-GB decoded-image blocks). See
+        # wukong-filtering/PERFORMANCE-NOTES.md §10.
+        _blk_mib = int(os.environ.get("DJ_TARGET_MAX_BLOCK_MIB", "0"))
+        if _blk_mib > 0:
+            import ray.data as _raydata
+
+            _raydata.DataContext.get_current().target_max_block_size = _blk_mib * 1024 * 1024
+            logger.info(f"Set Ray Data target_max_block_size = {_blk_mib} MiB")
         logger.info("Loading dataset with Ray...")
         dataset = self.datasetbuilder.load_dataset(num_proc=load_data_np)
         # Defer columns() call to after materialization to avoid triggering

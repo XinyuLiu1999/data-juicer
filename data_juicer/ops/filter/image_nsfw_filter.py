@@ -1,3 +1,5 @@
+from contextlib import nullcontext
+
 import numpy as np
 
 from data_juicer.utils.constant import Fields, StatsKeys
@@ -82,9 +84,11 @@ class ImageNSFWFilter(Filter):
 
         images = [images[key] for key in images]
         inputs = processor(images=images, return_tensors="pt").to(model.device)
-        with torch.no_grad():
+        # bf16 autocast on GPU; softmax in fp32 for numerical stability.
+        autocast_ctx = torch.autocast("cuda", dtype=torch.bfloat16) if self.use_cuda() else nullcontext()
+        with torch.no_grad(), autocast_ctx:
             outputs = model(**inputs)
-        logits = outputs.logits
+        logits = outputs.logits.float()
         nsfw_scores = [float(scores[1]) for scores in torch.softmax(logits, dim=-1)]
 
         sample[Fields.stats][StatsKeys.image_nsfw_score] = nsfw_scores
@@ -122,9 +126,10 @@ class ImageNSFWFilter(Filter):
         if all_images:
             model, processor = get_model(self.model_key, rank, self.use_cuda())
             inputs = processor(images=all_images, return_tensors="pt").to(model.device)
-            with torch.no_grad():
+            autocast_ctx = torch.autocast("cuda", dtype=torch.bfloat16) if self.use_cuda() else nullcontext()
+            with torch.no_grad(), autocast_ctx:
                 outputs = model(**inputs)
-            all_probs = torch.softmax(outputs.logits, dim=-1)
+            all_probs = torch.softmax(outputs.logits.float(), dim=-1)
 
             offset = 0
             for i in range(num_samples):

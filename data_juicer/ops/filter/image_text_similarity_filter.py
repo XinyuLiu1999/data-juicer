@@ -1,3 +1,5 @@
+from contextlib import nullcontext
+
 import numpy as np
 from PIL import ImageOps
 
@@ -141,11 +143,15 @@ class ImageTextSimilarityFilter(Filter):
                     padding=True,
                 ).to(model.device)
 
-                outputs = model(**inputs)
-                chunk_logits = outputs.logits_per_text / 100.0
+                # bf16 autocast on GPU; cast outputs back to fp32 before any
+                # .numpy() (numpy has no bfloat16) and for stable similarity.
+                autocast_ctx = torch.autocast("cuda", dtype=torch.bfloat16) if self.use_cuda() else nullcontext()
+                with torch.no_grad(), autocast_ctx:
+                    outputs = model(**inputs)
+                chunk_logits = outputs.logits_per_text.float() / 100.0
 
                 if self.save_embeddings:
-                    image_embeds = outputs.image_embeds
+                    image_embeds = outputs.image_embeds.float()
                     image_embeds = image_embeds / image_embeds.norm(
                         dim=-1, keepdim=True)
                     all_image_embeddings.extend(
@@ -240,9 +246,12 @@ class ImageTextSimilarityFilter(Filter):
                 images=all_images_flat,
                 return_tensors="pt",
             ).to(model.device)
-            with torch.no_grad():
+            # bf16 autocast on GPU; cast features to fp32 for norm/numpy/matmul.
+            autocast_ctx = torch.autocast("cuda", dtype=torch.bfloat16) if self.use_cuda() else nullcontext()
+            with torch.no_grad(), autocast_ctx:
                 image_features = model.get_image_features(**image_inputs)
-                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+            image_features = image_features.float()
+            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
 
             if self.save_embeddings:
                 all_image_embeds_np = image_features.cpu().numpy()
@@ -255,9 +264,11 @@ class ImageTextSimilarityFilter(Filter):
                 max_length=model.config.text_config.max_position_embeddings,
                 padding=True,
             ).to(model.device)
-            with torch.no_grad():
+            autocast_ctx = torch.autocast("cuda", dtype=torch.bfloat16) if self.use_cuda() else nullcontext()
+            with torch.no_grad(), autocast_ctx:
                 text_features = model.get_text_features(**text_inputs)
-                text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+            text_features = text_features.float()
+            text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
             # Compute per-chunk similarity
             logit_scale = model.logit_scale.exp().detach()

@@ -606,7 +606,11 @@ def prepare_huggingface_model(
                 logger.warning("accelerate not found, using device directly")
 
     pretrained_model_name_or_path = check_model_home(pretrained_model_name_or_path)
-    processor = transformers.AutoProcessor.from_pretrained(pretrained_model_name_or_path, **model_params)
+    # use_fast=True selects the torchvision-backed fast image processor, which
+    # is much faster at resize/normalize than the slow (PIL) default.
+    processor = transformers.AutoProcessor.from_pretrained(
+        pretrained_model_name_or_path, use_fast=True, **model_params
+    )
 
     if return_model:
         config = transformers.AutoConfig.from_pretrained(pretrained_model_name_or_path, **model_params)
@@ -983,7 +987,10 @@ def prepare_simple_aesthetics_model(pretrained_model_name_or_path, *, return_mod
                 logger.warning("accelerate not found, using device directly")
 
     pretrained_model_name_or_path = check_model_home(pretrained_model_name_or_path)
-    processor = transformers.CLIPProcessor.from_pretrained(pretrained_model_name_or_path, **model_params)
+    # use_fast=True selects the torchvision-backed fast image processor.
+    processor = transformers.CLIPProcessor.from_pretrained(
+        pretrained_model_name_or_path, use_fast=True, **model_params
+    )
     if not return_model:
         return processor
     else:
