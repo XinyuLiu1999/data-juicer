@@ -254,6 +254,67 @@ def preprocess_blip3o_ray(table: pyarrow.Table, image_special_token: str) -> pya
     return out_table
 
 
+def preprocess_taisu_ray(table: pyarrow.Table, image_special_token: str) -> pyarrow.Table:
+    """
+    Ray-compatible TaiSu (image-only WebDataset) preprocessing on PyArrow tables.
+
+    TaiSu tars contain only images (a 'jpg' column, no 'txt'/'json' caption).
+    This mirrors preprocess_blip3o_ray but does NOT require a 'txt' column:
+    - Wraps 'jpg' (raw JPEG bytes) into 'image_bytes' (list of bytes) and
+      creates 'images' (synthetic IDs derived from __key__)
+    - Synthesizes 'text' as just the image special token (empty caption), so
+      multimodal ops (e.g. image_text_similarity_filter) still form an
+      image-text chunk and can emit the CLIP image embedding. If a 'txt' column
+      happens to be present its value is appended after the token.
+
+    Expects images as raw bytes (not PIL), i.e. the output of _blip3o_decoder.
+    """
+    num_rows = table.num_rows
+    column_names = set(table.column_names)
+
+    jpg_col = table.column("jpg").to_pylist()
+    key_col = (table.column("__key__").to_pylist()
+               if "__key__" in column_names else [None] * num_rows)
+    txt_col = (table.column("txt").to_pylist()
+               if "txt" in column_names else [None] * num_rows)
+
+    image_ids = []
+    image_bytes_list = []
+    for i in range(num_rows):
+        img_bytes = jpg_col[i]
+        key = key_col[i] if key_col[i] is not None else str(i)
+        if img_bytes is not None:
+            image_bytes_list.append(img_bytes)
+            image_ids.append(f"{key}.jpg")
+        else:
+            image_bytes_list.append(None)
+            image_ids.append(None)
+
+    images_col = pyarrow.array(
+        [[iid] if iid is not None else [] for iid in image_ids],
+        type=pyarrow.list_(pyarrow.string()),
+    )
+    image_bytes_col = pyarrow.array(
+        [[ib] if ib is not None else [] for ib in image_bytes_list],
+        type=pyarrow.list_(pyarrow.binary()),
+    )
+    # No caption in TaiSu: text is just the image special token (empty caption).
+    text_col = pyarrow.array([
+        image_special_token + (txt_col[i] if txt_col[i] is not None else "")
+        for i in range(num_rows)
+    ])
+
+    cols_to_drop = {"jpg", "txt"}
+    cols_to_keep = [name for name in table.column_names
+                    if name not in cols_to_drop]
+    out_table = table.select(cols_to_keep)
+    out_table = out_table.append_column("text", text_col)
+    out_table = out_table.append_column("images", images_col)
+    out_table = out_table.append_column("image_bytes", image_bytes_col)
+
+    return out_table
+
+
 def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg):
     """Preprocess dataset and return (dataset, cached_columns).
 
@@ -330,6 +391,37 @@ def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg):
             columns.update(["text", "images", "image_bytes"])
         else:
             logger.info("BLIP3o preprocessing already applied, skipping.")
+
+    if cfg and getattr(cfg, "taisu_preprocessing", False):
+        # Skip if preprocessing was already applied (jpg column removed)
+        if "jpg" in columns:
+            from data_juicer.utils.mm_utils import SpecialTokens
+
+            preprocessing_num_cpus = getattr(
+                cfg, "taisu_preprocessing_num_cpus", 0.25
+            )
+            preprocessing_batch_size = getattr(
+                cfg, "taisu_preprocessing_batch_size",
+                DEFAULT_BATCH_SIZE
+            )
+            logger.info(
+                f"Applying TaiSu (image-only WebDataset) preprocessing for Ray "
+                f"dataset (num_cpus={preprocessing_num_cpus}, "
+                f"batch_size={preprocessing_batch_size})..."
+            )
+            dataset = dataset.map_batches(
+                partial(preprocess_taisu_ray,
+                        image_special_token=SpecialTokens.image),
+                batch_format="pyarrow",
+                batch_size=preprocessing_batch_size,
+                num_cpus=preprocessing_num_cpus,
+            )
+            # Update columns to reflect taisu preprocessing changes
+            columns.discard("jpg")
+            columns.discard("txt")
+            columns.update(["text", "images", "image_bytes"])
+        else:
+            logger.info("TaiSu preprocessing already applied, skipping.")
 
     return dataset, columns
 

@@ -433,6 +433,29 @@ def init_configs(args: Optional[List[str]] = None, which_entry: object = None, l
                 "Larger values amortize per-batch overhead but use more memory.",
             )
             parser.add_argument(
+                "--taisu_preprocessing",
+                type=bool,
+                default=False,
+                help="Enable TaiSu (image-only WebDataset) preprocessing. Like "  # noqa: E251
+                "BLIP3o but for tars with no caption: wraps 'jpg' into "
+                "'image_bytes', creates 'images' IDs from '__key__', and sets "
+                "'text' to just the image special token (empty caption).",
+            )
+            parser.add_argument(
+                "--taisu_preprocessing_num_cpus",
+                type=float,
+                default=0.25,
+                help="Number of CPUs per preprocessing task for TaiSu format. "  # noqa: E251
+                "Lower values (e.g. 0.25) allow more concurrent tasks.",
+            )
+            parser.add_argument(
+                "--taisu_preprocessing_batch_size",
+                type=int,
+                default=1000,
+                help="Batch size for TaiSu preprocessing map_batches. "  # noqa: E251
+                "Larger values amortize per-batch overhead but use more memory.",
+            )
+            parser.add_argument(
                 "--use_cache",
                 type=bool,
                 default=True,

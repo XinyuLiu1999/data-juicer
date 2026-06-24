@@ -290,8 +290,11 @@ class RayLocalJsonDataLoadStrategy(RayDataLoadStrategy):
         else:
             logger.info(f"Loading {data_format} data.")
         read_kwargs = {}
-        if data_format == "webdataset" and self.cfg and getattr(
-                self.cfg, "blip3o_preprocessing", False):
+        if data_format == "webdataset" and self.cfg and (
+                getattr(self.cfg, "blip3o_preprocessing", False)
+                or getattr(self.cfg, "taisu_preprocessing", False)):
+            # _blip3o_decoder keeps images as raw bytes (Arrow-serializable) and
+            # only decodes txt/json; it works for image-only TaiSu tars too.
             from data_juicer.utils.webdataset_utils import _blip3o_decoder
             read_kwargs["decoder"] = _blip3o_decoder
 
@@ -346,6 +349,7 @@ class DefaultLocalDataLoadStrategy(DefaultDataLoadStrategy):
         load_data_np = kwargs.get("num_proc", 1)
         laioncoco_preprocessing = getattr(self.cfg, "laioncoco_preprocessing", False)
         blip3o_preprocessing = getattr(self.cfg, "blip3o_preprocessing", False)
+        taisu_preprocessing = getattr(self.cfg, "taisu_preprocessing", False)
 
         # use proper formatter to load data
         formatter = load_formatter(
@@ -355,6 +359,7 @@ class DefaultLocalDataLoadStrategy(DefaultDataLoadStrategy):
             add_suffix=add_suffix,
             laioncoco_preprocessing=laioncoco_preprocessing,
             blip3o_preprocessing=blip3o_preprocessing,
+            taisu_preprocessing=taisu_preprocessing,
             **kwargs,
         )
         # TODO more sophiscated localformatter routing

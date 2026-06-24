@@ -11,6 +11,7 @@ def load_formatter(
     add_suffix=False,
     laioncoco_preprocessing=False,
     blip3o_preprocessing=False,
+    taisu_preprocessing=False,
     **kwargs,
 ) -> BaseFormatter:
     """
@@ -27,6 +28,8 @@ def load_formatter(
         preprocessing. Default: False
     :param blip3o_preprocessing: whether to apply BLIP3o WebDataset format
         preprocessing. Default: False
+    :param taisu_preprocessing: whether to apply TaiSu (image-only WebDataset)
+        format preprocessing. Default: False
     :return: a dataset formatter.
     """
 
@@ -63,6 +66,7 @@ def load_formatter(
             add_suffix=add_suffix,
             laioncoco_preprocessing=laioncoco_preprocessing,
             blip3o_preprocessing=blip3o_preprocessing,
+            taisu_preprocessing=taisu_preprocessing,
             **kwargs,
         )
 

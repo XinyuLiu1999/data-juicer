@@ -32,6 +32,7 @@ class LocalFormatter(BaseFormatter):
         add_suffix=False,
         laioncoco_preprocessing=False,
         blip3o_preprocessing=False,
+        taisu_preprocessing=False,
         **kwargs,
     ):
         """
@@ -49,6 +50,8 @@ class LocalFormatter(BaseFormatter):
             format preprocessing
         :param blip3o_preprocessing: whether to apply BLIP3o WebDataset
             format preprocessing
+        :param taisu_preprocessing: whether to apply TaiSu (image-only
+            WebDataset) format preprocessing
         :param kwargs: extra args
         """
         self.type = type
@@ -58,6 +61,7 @@ class LocalFormatter(BaseFormatter):
         self.add_suffix = add_suffix
         self.laioncoco_preprocessing = laioncoco_preprocessing
         self.blip3o_preprocessing = blip3o_preprocessing
+        self.taisu_preprocessing = taisu_preprocessing
 
     def load_dataset(self, num_proc: Optional[int] = None, global_cfg=None) -> Dataset:
         """
@@ -88,6 +92,8 @@ class LocalFormatter(BaseFormatter):
             datasets = preprocess_laioncoco(datasets, num_proc)
         if self.blip3o_preprocessing:
             datasets = preprocess_blip3o(datasets, num_proc)
+        if self.taisu_preprocessing:
+            datasets = preprocess_taisu(datasets, num_proc)
         ds = unify_format(datasets, text_keys=self.text_keys, num_proc=num_proc, global_cfg=global_cfg)
         return ds
 
@@ -248,6 +254,65 @@ def preprocess_blip3o(dataset, num_proc=1):
 
     dataset = dataset.map(
         transform, num_proc=num_proc, desc="BLIP3o preprocessing"
+    )
+
+    # Remove original webdataset columns
+    cols_to_remove = [
+        col
+        for col in ["jpg", "txt"]
+        if col in dataset.column_names
+    ]
+    if cols_to_remove:
+        dataset = dataset.remove_columns(cols_to_remove)
+
+    if not isinstance(dataset, NestedDataset):
+        dataset = NestedDataset(dataset)
+    return dataset
+
+
+def preprocess_taisu(dataset, num_proc=1):
+    """
+    Preprocess TaiSu (image-only WebDataset) format dataset.
+
+    Like preprocess_blip3o but for tars with NO caption ('jpg' + '__key__',
+    no 'txt'):
+    - Converts 'jpg' (PIL Image) to 'image_bytes' (raw JPEG bytes) and
+      creates 'images' (synthetic IDs derived from __key__)
+    - Sets 'text' to just the image special token (empty caption), so
+      multimodal ops can still correlate the image with text. If a 'txt'
+      field happens to be present its value is appended after the token.
+
+    :param dataset: a NestedDataset with image-only WebDataset schema
+    :param num_proc: number of processes for mapping
+    :return: transformed NestedDataset
+    """
+    import io
+
+    from data_juicer.core.data import NestedDataset
+    from data_juicer.utils.mm_utils import SpecialTokens
+
+    logger.info("Applying TaiSu (image-only WebDataset) preprocessing...")
+
+    def transform(sample):
+        img = sample.get("jpg")
+        key = sample.get("__key__", "unknown")
+        if img is not None:
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG")
+            sample["image_bytes"] = [buf.getvalue()]
+            sample["images"] = [f"{key}.jpg"]
+        else:
+            sample["image_bytes"] = []
+            sample["images"] = []
+
+        # No caption in TaiSu: text is just the image special token.
+        txt = sample.get("txt", "") or ""
+        sample["text"] = SpecialTokens.image + txt
+
+        return sample
+
+    dataset = dataset.map(
+        transform, num_proc=num_proc, desc="TaiSu preprocessing"
     )
 
     # Remove original webdataset columns
