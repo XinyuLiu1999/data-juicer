@@ -528,6 +528,7 @@
     <span class="n">add_suffix</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">laioncoco_preprocessing</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">blip3o_preprocessing</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">taisu_preprocessing</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BaseFormatter</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -544,6 +545,8 @@
 <span class="sd">        preprocessing. Default: False</span>
 <span class="sd">    :param blip3o_preprocessing: whether to apply BLIP3o WebDataset format</span>
 <span class="sd">        preprocessing. Default: False</span>
+<span class="sd">    :param taisu_preprocessing: whether to apply TaiSu (image-only WebDataset)</span>
+<span class="sd">        format preprocessing. Default: False</span>
 <span class="sd">    :return: a dataset formatter.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
@@ -580,6 +583,7 @@
             <span class="n">add_suffix</span><span class="o">=</span><span class="n">add_suffix</span><span class="p">,</span>
             <span class="n">laioncoco_preprocessing</span><span class="o">=</span><span class="n">laioncoco_preprocessing</span><span class="p">,</span>
             <span class="n">blip3o_preprocessing</span><span class="o">=</span><span class="n">blip3o_preprocessing</span><span class="p">,</span>
+            <span class="n">taisu_preprocessing</span><span class="o">=</span><span class="n">taisu_preprocessing</span><span class="p">,</span>
             <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
         <span class="p">)</span>
 
