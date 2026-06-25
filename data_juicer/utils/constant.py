@@ -280,6 +280,7 @@ class StatsKeysConstant(object):
 
     #  === image ===
     aspect_ratios = "aspect_ratios"
+    image_valid = "image_valid"
     image_width = "image_width"
     image_height = "image_height"
     image_sizes = "image_sizes"

@@ -20,6 +20,7 @@ from .image_entropy_filter import ImageEntropyFilter
 from .image_maniqa_filter import ImageManiqaFilter
 from .image_shape_filter import ImageShapeFilter
 from .image_size_filter import ImageSizeFilter
+from .image_validity_filter import ImageValidityFilter
 from .image_subplot_filter import ImageSubplotFilter
 from .image_text_matching_filter import ImageTextMatchingFilter
 from .image_text_similarity_filter import ImageTextSimilarityFilter
@@ -81,6 +82,7 @@ __all__ = [
     "ImageQualityFilter",
     "ImageShapeFilter",
     "ImageSizeFilter",
+    "ImageValidityFilter",
     "ImageSubplotFilter",
     "ImageTextMatchingFilter",
     "ImageTextSimilarityFilter",

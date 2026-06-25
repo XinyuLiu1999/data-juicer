@@ -782,14 +782,37 @@ class Filter(OP):
         return res_bool
 
     def compute_stats_batched(self, samples, *args, **kwargs):
-        keys = samples.keys()
+        keys = list(samples.keys())
         num_samples = len(samples[Fields.stats])
+        failed = []
+        first_err = None
         for i in range(num_samples):
             this_sample = {key: samples[key][i] for key in keys}
-            res_sample = self.compute_stats_single(this_sample, *args, **kwargs)
-            samples[Fields.stats][i] = res_sample[Fields.stats]
-            if "context" in kwargs and kwargs["context"]:
-                samples[Fields.context][i] = res_sample[Fields.context]
+            try:
+                res_sample = self.compute_stats_single(this_sample, *args, **kwargs)
+                samples[Fields.stats][i] = res_sample[Fields.stats]
+                if "context" in kwargs and kwargs["context"]:
+                    samples[Fields.context][i] = res_sample[Fields.context]
+            except Exception as e:
+                # strict mode: preserve the original fail-fast behaviour
+                if not self.skip_op_error:
+                    raise
+                # tolerant mode: drop ONLY this sample, not the whole batch
+                failed.append(i)
+                if first_err is None:
+                    first_err = f"{type(e).__name__}: {e}"
+
+        if failed:
+            from loguru import logger
+
+            logger.warning(
+                f"{self._name}: dropped {len(failed)}/{num_samples} sample(s) in this "
+                f"batch due to per-sample errors in compute_stats_single "
+                f"(first: {first_err})"
+            )
+            failed_set = set(failed)
+            keep = [i for i in range(num_samples) if i not in failed_set]
+            samples = {key: [samples[key][i] for i in keep] for key in keys}
 
         return samples
 
