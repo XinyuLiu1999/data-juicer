@@ -456,6 +456,30 @@ def init_configs(args: Optional[List[str]] = None, which_entry: object = None, l
                 "Larger values amortize per-batch overhead but use more memory.",
             )
             parser.add_argument(
+                "--danqing_preprocessing",
+                type=bool,
+                default=False,
+                help="Enable DanQing (HuggingFace image+caption parquet) "  # noqa: E251
+                "preprocessing. When True, flattens 'images' (struct<bytes>) into "
+                "'image_bytes' (raw bytes) and 'images' (image IDs), and builds "
+                "'text' from 'alt_text' prepended with the image special token. "
+                "'alt_text' and 'recaption' are dropped.",
+            )
+            parser.add_argument(
+                "--danqing_preprocessing_num_cpus",
+                type=float,
+                default=0.25,
+                help="Number of CPUs per preprocessing task for DanQing format. "  # noqa: E251
+                "Lower values (e.g. 0.25) allow more concurrent tasks.",
+            )
+            parser.add_argument(
+                "--danqing_preprocessing_batch_size",
+                type=int,
+                default=1000,
+                help="Batch size for DanQing preprocessing map_batches. "  # noqa: E251
+                "Larger values amortize per-batch overhead but use more memory.",
+            )
+            parser.add_argument(
                 "--use_cache",
                 type=bool,
                 default=True,

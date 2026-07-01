@@ -315,6 +315,78 @@ def preprocess_taisu_ray(table: pyarrow.Table, image_special_token: str) -> pyar
     return out_table
 
 
+def preprocess_danqing_ray(table: pyarrow.Table, image_special_token: str) -> pyarrow.Table:
+    """
+    Ray-compatible DanQing preprocessing operating on PyArrow tables.
+
+    DanQing shards are HuggingFace image+caption parquet with columns
+    'images' (struct<bytes>), 'alt_text' and 'recaption'. This reshapes them
+    into Data-Juicer's standard multimodal schema:
+    - Flattens the 'images' struct<bytes> column into 'image_bytes' (list of
+      raw bytes) and synthesizes 'images' (a one-element list of string IDs
+      per row; the bytes are the real payload the ops consume).
+    - Builds 'text' from the 'alt_text' caption, prepended with the image
+      special token so multimodal ops (e.g. image_text_similarity_filter)
+      form an image-text chunk. 'alt_text' is dropped; 'recaption' is kept as
+      its own passthrough column.
+
+    Each row holds exactly one image, so per-chunk unit-length list wrapping
+    keeps image bytes zero-copy (no combine_chunks(), which would copy every
+    image payload into one contiguous buffer).
+    """
+    num_rows = table.num_rows
+
+    # --- Flatten images struct<bytes> into image_bytes (one image per row) ---
+    if "images" in table.column_names:
+        img_chunked = table.column("images")
+        byte_chunks = []
+        for chunk in img_chunked.chunks:
+            n = len(chunk)
+            field_names = [chunk.type.field(i).name
+                           for i in range(chunk.type.num_fields)]
+            bts = (chunk.field("bytes")
+                   if "bytes" in field_names
+                   else pyarrow.nulls(n, type=pyarrow.binary()))
+            # one image per row -> unit-length lists, offsets [0, 1, ..., n]
+            offsets = pyarrow.array(range(n + 1), type=pyarrow.int32())
+            byte_chunks.append(
+                pyarrow.ListArray.from_arrays(offsets, bts))
+        image_bytes_col = pyarrow.chunked_array(
+            byte_chunks, type=pyarrow.list_(pyarrow.binary()))
+    else:
+        empty_bin = pyarrow.array([], type=pyarrow.binary())
+        zero_offsets = pyarrow.array([0] * (num_rows + 1),
+                                     type=pyarrow.int32())
+        image_bytes_col = pyarrow.chunked_array(
+            [pyarrow.ListArray.from_arrays(zero_offsets, empty_bin)])
+
+    # --- Synthesize one image ID per row (bytes are the real payload) ---
+    images_col = pyarrow.array(
+        [[f"{i}.jpg"] for i in range(num_rows)],
+        type=pyarrow.list_(pyarrow.string()),
+    )
+
+    # --- Build text from alt_text, prefixed with the image special token ---
+    alt_col = (table.column("alt_text").to_pylist()
+               if "alt_text" in table.column_names else [None] * num_rows)
+    text_col = pyarrow.array([
+        image_special_token + (alt_col[i] if alt_col[i] is not None else "")
+        for i in range(num_rows)
+    ])
+
+    # --- Build output table, dropping the raw image struct + consumed caption
+    #     ('recaption' is kept as a passthrough column) ---
+    cols_to_drop = {"images", "alt_text"}
+    cols_to_keep = [name for name in table.column_names
+                    if name not in cols_to_drop]
+    out_table = table.select(cols_to_keep)
+    out_table = out_table.append_column("text", text_col)
+    out_table = out_table.append_column("images", images_col)
+    out_table = out_table.append_column("image_bytes", image_bytes_col)
+
+    return out_table
+
+
 def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg):
     """Preprocess dataset and return (dataset, cached_columns).
 
@@ -422,6 +494,37 @@ def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg):
             columns.update(["text", "images", "image_bytes"])
         else:
             logger.info("TaiSu preprocessing already applied, skipping.")
+
+    if cfg and getattr(cfg, "danqing_preprocessing", False):
+        # Skip if preprocessing was already applied (alt_text removed)
+        if "alt_text" in columns:
+            from data_juicer.utils.mm_utils import SpecialTokens
+
+            preprocessing_num_cpus = getattr(
+                cfg, "danqing_preprocessing_num_cpus", 0.25
+            )
+            preprocessing_batch_size = getattr(
+                cfg, "danqing_preprocessing_batch_size",
+                DEFAULT_BATCH_SIZE
+            )
+            logger.info(
+                f"Applying DanQing (image+caption parquet) preprocessing for "
+                f"Ray dataset (num_cpus={preprocessing_num_cpus}, "
+                f"batch_size={preprocessing_batch_size})..."
+            )
+            dataset = dataset.map_batches(
+                partial(preprocess_danqing_ray,
+                        image_special_token=SpecialTokens.image),
+                batch_format="pyarrow",
+                batch_size=preprocessing_batch_size,
+                num_cpus=preprocessing_num_cpus,
+            )
+            # Update columns to reflect danqing preprocessing changes
+            # ('recaption' is kept as a passthrough column)
+            columns.discard("alt_text")
+            columns.update(["text", "images", "image_bytes"])
+        else:
+            logger.info("DanQing preprocessing already applied, skipping.")
 
     return dataset, columns
 

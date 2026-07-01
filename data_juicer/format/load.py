@@ -12,6 +12,7 @@ def load_formatter(
     laioncoco_preprocessing=False,
     blip3o_preprocessing=False,
     taisu_preprocessing=False,
+    danqing_preprocessing=False,
     **kwargs,
 ) -> BaseFormatter:
     """
@@ -30,6 +31,8 @@ def load_formatter(
         preprocessing. Default: False
     :param taisu_preprocessing: whether to apply TaiSu (image-only WebDataset)
         format preprocessing. Default: False
+    :param danqing_preprocessing: whether to apply DanQing (image+caption
+        parquet) format preprocessing. Default: False
     :return: a dataset formatter.
     """
 
@@ -67,6 +70,7 @@ def load_formatter(
             laioncoco_preprocessing=laioncoco_preprocessing,
             blip3o_preprocessing=blip3o_preprocessing,
             taisu_preprocessing=taisu_preprocessing,
+            danqing_preprocessing=danqing_preprocessing,
             **kwargs,
         )
 

@@ -33,6 +33,7 @@ class LocalFormatter(BaseFormatter):
         laioncoco_preprocessing=False,
         blip3o_preprocessing=False,
         taisu_preprocessing=False,
+        danqing_preprocessing=False,
         **kwargs,
     ):
         """
@@ -52,6 +53,8 @@ class LocalFormatter(BaseFormatter):
             format preprocessing
         :param taisu_preprocessing: whether to apply TaiSu (image-only
             WebDataset) format preprocessing
+        :param danqing_preprocessing: whether to apply DanQing (image+caption
+            parquet) format preprocessing
         :param kwargs: extra args
         """
         self.type = type
@@ -62,6 +65,7 @@ class LocalFormatter(BaseFormatter):
         self.laioncoco_preprocessing = laioncoco_preprocessing
         self.blip3o_preprocessing = blip3o_preprocessing
         self.taisu_preprocessing = taisu_preprocessing
+        self.danqing_preprocessing = danqing_preprocessing
 
     def load_dataset(self, num_proc: Optional[int] = None, global_cfg=None) -> Dataset:
         """
@@ -94,6 +98,8 @@ class LocalFormatter(BaseFormatter):
             datasets = preprocess_blip3o(datasets, num_proc)
         if self.taisu_preprocessing:
             datasets = preprocess_taisu(datasets, num_proc)
+        if self.danqing_preprocessing:
+            datasets = preprocess_danqing(datasets, num_proc)
         ds = unify_format(datasets, text_keys=self.text_keys, num_proc=num_proc, global_cfg=global_cfg)
         return ds
 
@@ -319,6 +325,77 @@ def preprocess_taisu(dataset, num_proc=1):
     cols_to_remove = [
         col
         for col in ["jpg", "txt"]
+        if col in dataset.column_names
+    ]
+    if cols_to_remove:
+        dataset = dataset.remove_columns(cols_to_remove)
+
+    if not isinstance(dataset, NestedDataset):
+        dataset = NestedDataset(dataset)
+    return dataset
+
+
+def preprocess_danqing(dataset, num_proc=1):
+    """
+    Preprocess DanQing (HuggingFace image+caption parquet) format dataset.
+
+    DanQing shards carry columns 'images' (struct<bytes>), 'alt_text' and
+    'recaption'. This reshapes them into the format expected by Data-Juicer:
+    - Flattens the 'images' struct<bytes> into 'image_bytes' (raw JPEG bytes)
+      and creates 'images' (synthetic one-element ID list per row); the bytes
+      are the real payload the ops consume.
+    - Builds 'text' from 'alt_text', prepended with the image special token so
+      multimodal ops can correlate the image with text. 'alt_text' is dropped;
+      'recaption' is kept as its own passthrough column.
+
+    :param dataset: a NestedDataset with DanQing schema
+    :param num_proc: number of processes for mapping
+    :return: transformed NestedDataset
+    """
+    import io
+
+    from data_juicer.core.data import NestedDataset
+    from data_juicer.utils.mm_utils import SpecialTokens
+
+    logger.info("Applying DanQing (image+caption parquet) preprocessing...")
+
+    def transform(sample, idx):
+        # Extract raw image bytes; datasets may surface 'images' as a struct
+        # dict ({'bytes': ...}) or as a decoded PIL Image.
+        img = sample.get("images")
+        raw = None
+        if isinstance(img, dict):
+            raw = img.get("bytes")
+        elif img is not None and hasattr(img, "save"):
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG")
+            raw = buf.getvalue()
+        elif isinstance(img, (bytes, bytearray)):
+            raw = bytes(img)
+
+        if raw is not None:
+            sample["image_bytes"] = [raw]
+            sample["images"] = [f"{idx}.jpg"]
+        else:
+            sample["image_bytes"] = []
+            sample["images"] = []
+
+        # Build text from alt_text, prefixed with the image special token
+        alt = sample.get("alt_text", "") or ""
+        sample["text"] = SpecialTokens.image + alt
+
+        return sample
+
+    dataset = dataset.map(
+        transform, with_indices=True, num_proc=num_proc,
+        desc="DanQing preprocessing"
+    )
+
+    # Remove the consumed caption column ('images' is overwritten above;
+    # 'recaption' is kept as a passthrough column)
+    cols_to_remove = [
+        col
+        for col in ["alt_text"]
         if col in dataset.column_names
     ]
     if cols_to_remove:

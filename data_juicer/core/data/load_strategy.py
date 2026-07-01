@@ -350,6 +350,7 @@ class DefaultLocalDataLoadStrategy(DefaultDataLoadStrategy):
         laioncoco_preprocessing = getattr(self.cfg, "laioncoco_preprocessing", False)
         blip3o_preprocessing = getattr(self.cfg, "blip3o_preprocessing", False)
         taisu_preprocessing = getattr(self.cfg, "taisu_preprocessing", False)
+        danqing_preprocessing = getattr(self.cfg, "danqing_preprocessing", False)
 
         # use proper formatter to load data
         formatter = load_formatter(
@@ -360,6 +361,7 @@ class DefaultLocalDataLoadStrategy(DefaultDataLoadStrategy):
             laioncoco_preprocessing=laioncoco_preprocessing,
             blip3o_preprocessing=blip3o_preprocessing,
             taisu_preprocessing=taisu_preprocessing,
+            danqing_preprocessing=danqing_preprocessing,
             **kwargs,
         )
         # TODO more sophiscated localformatter routing
