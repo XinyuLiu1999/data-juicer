@@ -585,6 +585,29 @@ happens to be present its value is appended after the token.</p></li>
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="data_juicer.core.data.ray_dataset.preprocess_danqing_ray">
+<span class="sig-prename descclassname"><span class="pre">data_juicer.core.data.ray_dataset.</span></span><span class="sig-name descname"><span class="pre">preprocess_danqing_ray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_special_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Table</span></span></span><a class="reference internal" href="../_modules/data_juicer/core/data/ray_dataset.html#preprocess_danqing_ray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.core.data.ray_dataset.preprocess_danqing_ray" title="Link to this definition">#</a></dt>
+<dd><p>Ray-compatible DanQing preprocessing operating on PyArrow tables.</p>
+<p>DanQing shards are HuggingFace image+caption parquet with columns
+‘images’ (struct&lt;bytes&gt;), ‘alt_text’ and ‘recaption’. This reshapes them
+into Data-Juicer’s standard multimodal schema:
+- Flattens the ‘images’ struct&lt;bytes&gt; column into ‘image_bytes’ (list of</p>
+<blockquote>
+<div><p>raw bytes) and synthesizes ‘images’ (a one-element list of string IDs
+per row; the bytes are the real payload the ops consume).</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>Builds ‘text’ from the ‘alt_text’ caption, prepended with the image
+special token so multimodal ops (e.g. image_text_similarity_filter)
+form an image-text chunk. ‘alt_text’ is dropped; ‘recaption’ is kept as
+its own passthrough column.</p></li>
+</ul>
+<p>Each row holds exactly one image, so per-chunk unit-length list wrapping
+keeps image bytes zero-copy (no combine_chunks(), which would copy every
+image payload into one contiguous buffer).</p>
+</dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="data_juicer.core.data.ray_dataset.preprocess_dataset">
 <span class="sig-prename descclassname"><span class="pre">data_juicer.core.data.ray_dataset.</span></span><span class="sig-name descname"><span class="pre">preprocess_dataset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dataset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data_juicer/core/data/ray_dataset.html#preprocess_dataset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.core.data.ray_dataset.preprocess_dataset" title="Link to this definition">#</a></dt>
 <dd><p>Preprocess dataset and return (dataset, cached_columns).</p>
@@ -738,6 +761,7 @@ assertion errors.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_laioncoco_ray"><code class="docutils literal notranslate"><span class="pre">preprocess_laioncoco_ray()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_blip3o_ray"><code class="docutils literal notranslate"><span class="pre">preprocess_blip3o_ray()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_taisu_ray"><code class="docutils literal notranslate"><span class="pre">preprocess_taisu_ray()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_danqing_ray"><code class="docutils literal notranslate"><span class="pre">preprocess_danqing_ray()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_dataset"><code class="docutils literal notranslate"><span class="pre">preprocess_dataset()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.filter_batch"><code class="docutils literal notranslate"><span class="pre">filter_batch()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.RayDataset"><code class="docutils literal notranslate"><span class="pre">RayDataset</span></code></a><ul class="nav section-nav flex-column">

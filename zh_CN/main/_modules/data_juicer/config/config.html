@@ -979,6 +979,30 @@
                 <span class="s2">&quot;Larger values amortize per-batch overhead but use more memory.&quot;</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+                <span class="s2">&quot;--danqing_preprocessing&quot;</span><span class="p">,</span>
+                <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Enable DanQing (HuggingFace image+caption parquet) &quot;</span>  <span class="c1"># noqa: E251</span>
+                <span class="s2">&quot;preprocessing. When True, flattens &#39;images&#39; (struct&lt;bytes&gt;) into &quot;</span>
+                <span class="s2">&quot;&#39;image_bytes&#39; (raw bytes) and &#39;images&#39; (image IDs), and builds &quot;</span>
+                <span class="s2">&quot;&#39;text&#39; from &#39;alt_text&#39; prepended with the image special token. &quot;</span>
+                <span class="s2">&quot;&#39;alt_text&#39; and &#39;recaption&#39; are dropped.&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+                <span class="s2">&quot;--danqing_preprocessing_num_cpus&quot;</span><span class="p">,</span>
+                <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
+                <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Number of CPUs per preprocessing task for DanQing format. &quot;</span>  <span class="c1"># noqa: E251</span>
+                <span class="s2">&quot;Lower values (e.g. 0.25) allow more concurrent tasks.&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+                <span class="s2">&quot;--danqing_preprocessing_batch_size&quot;</span><span class="p">,</span>
+                <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+                <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Batch size for DanQing preprocessing map_batches. &quot;</span>  <span class="c1"># noqa: E251</span>
+                <span class="s2">&quot;Larger values amortize per-batch overhead but use more memory.&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
                 <span class="s2">&quot;--use_cache&quot;</span><span class="p">,</span>
                 <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
                 <span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>

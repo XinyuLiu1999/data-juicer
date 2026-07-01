@@ -847,6 +847,81 @@
 
 
 
+<div class="viewcode-block" id="preprocess_danqing_ray">
+<a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.preprocess_danqing_ray">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">preprocess_danqing_ray</span><span class="p">(</span><span class="n">table</span><span class="p">:</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">Table</span><span class="p">,</span> <span class="n">image_special_token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">Table</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Ray-compatible DanQing preprocessing operating on PyArrow tables.</span>
+
+<span class="sd">    DanQing shards are HuggingFace image+caption parquet with columns</span>
+<span class="sd">    &#39;images&#39; (struct&lt;bytes&gt;), &#39;alt_text&#39; and &#39;recaption&#39;. This reshapes them</span>
+<span class="sd">    into Data-Juicer&#39;s standard multimodal schema:</span>
+<span class="sd">    - Flattens the &#39;images&#39; struct&lt;bytes&gt; column into &#39;image_bytes&#39; (list of</span>
+<span class="sd">      raw bytes) and synthesizes &#39;images&#39; (a one-element list of string IDs</span>
+<span class="sd">      per row; the bytes are the real payload the ops consume).</span>
+<span class="sd">    - Builds &#39;text&#39; from the &#39;alt_text&#39; caption, prepended with the image</span>
+<span class="sd">      special token so multimodal ops (e.g. image_text_similarity_filter)</span>
+<span class="sd">      form an image-text chunk. &#39;alt_text&#39; is dropped; &#39;recaption&#39; is kept as</span>
+<span class="sd">      its own passthrough column.</span>
+
+<span class="sd">    Each row holds exactly one image, so per-chunk unit-length list wrapping</span>
+<span class="sd">    keeps image bytes zero-copy (no combine_chunks(), which would copy every</span>
+<span class="sd">    image payload into one contiguous buffer).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">num_rows</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">num_rows</span>
+
+    <span class="c1"># --- Flatten images struct&lt;bytes&gt; into image_bytes (one image per row) ---</span>
+    <span class="k">if</span> <span class="s2">&quot;images&quot;</span> <span class="ow">in</span> <span class="n">table</span><span class="o">.</span><span class="n">column_names</span><span class="p">:</span>
+        <span class="n">img_chunked</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">column</span><span class="p">(</span><span class="s2">&quot;images&quot;</span><span class="p">)</span>
+        <span class="n">byte_chunks</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">img_chunked</span><span class="o">.</span><span class="n">chunks</span><span class="p">:</span>
+            <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
+            <span class="n">field_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">chunk</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">.</span><span class="n">name</span>
+                           <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">chunk</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">num_fields</span><span class="p">)]</span>
+            <span class="n">bts</span> <span class="o">=</span> <span class="p">(</span><span class="n">chunk</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="s2">&quot;bytes&quot;</span><span class="p">)</span>
+                   <span class="k">if</span> <span class="s2">&quot;bytes&quot;</span> <span class="ow">in</span> <span class="n">field_names</span>
+                   <span class="k">else</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">nulls</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">binary</span><span class="p">()))</span>
+            <span class="c1"># one image per row -&gt; unit-length lists, offsets [0, 1, ..., n]</span>
+            <span class="n">offsets</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int32</span><span class="p">())</span>
+            <span class="n">byte_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">bts</span><span class="p">))</span>
+        <span class="n">image_bytes_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span>
+            <span class="n">byte_chunks</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">list_</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">binary</span><span class="p">()))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">empty_bin</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">binary</span><span class="p">())</span>
+        <span class="n">zero_offsets</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">num_rows</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+                                     <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int32</span><span class="p">())</span>
+        <span class="n">image_bytes_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">zero_offsets</span><span class="p">,</span> <span class="n">empty_bin</span><span class="p">)])</span>
+
+    <span class="c1"># --- Synthesize one image ID per row (bytes are the real payload) ---</span>
+    <span class="n">images_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+        <span class="p">[[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">.jpg&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_rows</span><span class="p">)],</span>
+        <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">list_</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">()),</span>
+    <span class="p">)</span>
+
+    <span class="c1"># --- Build text from alt_text, prefixed with the image special token ---</span>
+    <span class="n">alt_col</span> <span class="o">=</span> <span class="p">(</span><span class="n">table</span><span class="o">.</span><span class="n">column</span><span class="p">(</span><span class="s2">&quot;alt_text&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to_pylist</span><span class="p">()</span>
+               <span class="k">if</span> <span class="s2">&quot;alt_text&quot;</span> <span class="ow">in</span> <span class="n">table</span><span class="o">.</span><span class="n">column_names</span> <span class="k">else</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="n">num_rows</span><span class="p">)</span>
+    <span class="n">text_col</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+        <span class="n">image_special_token</span> <span class="o">+</span> <span class="p">(</span><span class="n">alt_col</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">alt_col</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_rows</span><span class="p">)</span>
+    <span class="p">])</span>
+
+    <span class="c1"># --- Build output table, dropping the raw image struct + consumed caption</span>
+    <span class="c1">#     (&#39;recaption&#39; is kept as a passthrough column) ---</span>
+    <span class="n">cols_to_drop</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="s2">&quot;alt_text&quot;</span><span class="p">}</span>
+    <span class="n">cols_to_keep</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">table</span><span class="o">.</span><span class="n">column_names</span>
+                    <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">cols_to_drop</span><span class="p">]</span>
+    <span class="n">out_table</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">cols_to_keep</span><span class="p">)</span>
+    <span class="n">out_table</span> <span class="o">=</span> <span class="n">out_table</span><span class="o">.</span><span class="n">append_column</span><span class="p">(</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="n">text_col</span><span class="p">)</span>
+    <span class="n">out_table</span> <span class="o">=</span> <span class="n">out_table</span><span class="o">.</span><span class="n">append_column</span><span class="p">(</span><span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="n">images_col</span><span class="p">)</span>
+    <span class="n">out_table</span> <span class="o">=</span> <span class="n">out_table</span><span class="o">.</span><span class="n">append_column</span><span class="p">(</span><span class="s2">&quot;image_bytes&quot;</span><span class="p">,</span> <span class="n">image_bytes_col</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">out_table</span></div>
+
+
+
 <div class="viewcode-block" id="preprocess_dataset">
 <a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.preprocess_dataset">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">preprocess_dataset</span><span class="p">(</span><span class="n">dataset</span><span class="p">:</span> <span class="n">ray</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Dataset</span><span class="p">,</span> <span class="n">dataset_path</span><span class="p">,</span> <span class="n">cfg</span><span class="p">):</span>
@@ -956,6 +1031,37 @@
             <span class="n">columns</span><span class="o">.</span><span class="n">update</span><span class="p">([</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="s2">&quot;image_bytes&quot;</span><span class="p">])</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;TaiSu preprocessing already applied, skipping.&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">cfg</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;danqing_preprocessing&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+        <span class="c1"># Skip if preprocessing was already applied (alt_text removed)</span>
+        <span class="k">if</span> <span class="s2">&quot;alt_text&quot;</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.mm_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpecialTokens</span>
+
+            <span class="n">preprocessing_num_cpus</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+                <span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;danqing_preprocessing_num_cpus&quot;</span><span class="p">,</span> <span class="mf">0.25</span>
+            <span class="p">)</span>
+            <span class="n">preprocessing_batch_size</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+                <span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;danqing_preprocessing_batch_size&quot;</span><span class="p">,</span>
+                <span class="n">DEFAULT_BATCH_SIZE</span>
+            <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Applying DanQing (image+caption parquet) preprocessing for &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Ray dataset (num_cpus=</span><span class="si">{</span><span class="n">preprocessing_num_cpus</span><span class="si">}</span><span class="s2">, &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;batch_size=</span><span class="si">{</span><span class="n">preprocessing_batch_size</span><span class="si">}</span><span class="s2">)...&quot;</span>
+            <span class="p">)</span>
+            <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">map_batches</span><span class="p">(</span>
+                <span class="n">partial</span><span class="p">(</span><span class="n">preprocess_danqing_ray</span><span class="p">,</span>
+                        <span class="n">image_special_token</span><span class="o">=</span><span class="n">SpecialTokens</span><span class="o">.</span><span class="n">image</span><span class="p">),</span>
+                <span class="n">batch_format</span><span class="o">=</span><span class="s2">&quot;pyarrow&quot;</span><span class="p">,</span>
+                <span class="n">batch_size</span><span class="o">=</span><span class="n">preprocessing_batch_size</span><span class="p">,</span>
+                <span class="n">num_cpus</span><span class="o">=</span><span class="n">preprocessing_num_cpus</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="c1"># Update columns to reflect danqing preprocessing changes</span>
+            <span class="c1"># (&#39;recaption&#39; is kept as a passthrough column)</span>
+            <span class="n">columns</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="s2">&quot;alt_text&quot;</span><span class="p">)</span>
+            <span class="n">columns</span><span class="o">.</span><span class="n">update</span><span class="p">([</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="s2">&quot;image_bytes&quot;</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;DanQing preprocessing already applied, skipping.&quot;</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">columns</span></div>
 
