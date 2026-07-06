@@ -152,12 +152,18 @@ class ImageBlurrinessFilterTest(DataJuicerTestCaseBase):
                                          column=[{}] * dataset.num_rows)
         op = ImageBlurrinessFilter()
         dataset_with_stats = dataset.map(op.compute_stats)
+        all_scores = [
+            s
+            for sample in dataset_with_stats
+            for s in sample[Fields.stats][StatsKeys.image_blurriness_scores]
+        ]
 
-        # With very high threshold in 'all' mode, samples with mixed scores fail
-        # Set threshold high enough that not all images pass
-        op = ImageBlurrinessFilter(min_blurriness=1000, any_or_all='all')
+        # With a threshold above every image's score, no image passes, so in
+        # 'all' mode every sample is dropped regardless of the score scale.
+        threshold = max(all_scores) + 1
+        op = ImageBlurrinessFilter(min_blurriness=threshold, any_or_all='all')
         dataset = Dataset.from_list(ds_list)
-        tgt_list = []  # Likely no sample will have all images with score >= 1000
+        tgt_list = []
         self._run_filter(dataset, tgt_list, op)
 
     def test_empty_images(self):

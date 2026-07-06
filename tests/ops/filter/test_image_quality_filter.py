@@ -174,7 +174,7 @@ class ImageQualityFilterTest(DataJuicerTestCaseBase):
 
         # Apply filter with very strict criteria
         op = ImageQualityFilter(
-            min_blurriness=1000.0,  # Very high threshold - nothing should pass
+            min_blurriness=1e6,  # Above the max possible score - nothing should pass
         )
 
         if Fields.stats not in dataset.features:

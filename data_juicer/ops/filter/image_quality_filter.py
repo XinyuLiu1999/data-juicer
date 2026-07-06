@@ -9,8 +9,11 @@ from data_juicer.utils.mm_utils import load_data_with_context, load_image
 from ..base_op import OPERATORS, Filter
 from ..op_fusion import LOADED_IMAGES
 
-# Maximum resolution for blurry detection (to avoid memory issues with large images)
-MAX_RESOLUTION_FOR_BLURRY_DETECTION = 512
+# Common resolution that images are scale-normalized to for blurry detection.
+# The variance of the Laplacian scales with resolution, so normalizing to a
+# fixed size makes the score comparable across images of any original size
+# (and caps memory use for large images).
+TARGET_RESOLUTION_FOR_BLURRY_DETECTION = 512
 
 
 def calculate_brightness(red, green, blue):
@@ -29,11 +32,13 @@ def calc_blurriness(image):
     :param image: PIL Image object
     :return: blurriness score (higher = sharper)
     """
-    # Resize if too large
-    ratio = max(image.width, image.height) / MAX_RESOLUTION_FOR_BLURRY_DETECTION
-    if ratio > 1:
+    # Scale-normalize: resize so the longer side matches the target resolution
+    # (both up- and down-scaling), preserving aspect ratio, so the Laplacian
+    # variance is comparable across images of any original size.
+    ratio = max(image.width, image.height) / TARGET_RESOLUTION_FOR_BLURRY_DETECTION
+    if ratio != 1:
         resized_image = image.resize(
-            (max(int(image.width // ratio), 1), max(int(image.height // ratio), 1))
+            (max(round(image.width / ratio), 1), max(round(image.height / ratio), 1))
         )
     else:
         resized_image = image.copy()
@@ -41,12 +46,11 @@ def calc_blurriness(image):
     # Convert to grayscale
     gray_image = resized_image.convert("L")
 
-    # Apply edge detection filter
+    # Apply Laplacian edge detection filter (PIL FIND_EDGES is a 3x3 Laplacian)
     edges = gray_image.filter(ImageFilter.FIND_EDGES)
 
-    # Calculate variance of edges - higher variance = sharper image
-    blurriness = ImageStat.Stat(edges).var[0]
-    return np.sqrt(blurriness)
+    # Variance of the Laplacian - higher variance = sharper image
+    return float(ImageStat.Stat(edges).var[0])
 
 def calc_entropy(image):
     """

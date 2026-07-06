@@ -6,20 +6,25 @@ from data_juicer.utils.mm_utils import load_data_with_context, load_image
 from ..base_op import OPERATORS, Filter
 from ..op_fusion import LOADED_IMAGES
 
-MAX_RESOLUTION_FOR_BLURRY_DETECTION = 512
+TARGET_RESOLUTION_FOR_BLURRY_DETECTION = 512
 
 
 def calc_blurriness(image):
-    ratio = max(image.width, image.height) / MAX_RESOLUTION_FOR_BLURRY_DETECTION
-    if ratio > 1:
+    # Scale-normalize before measuring sharpness: the variance of the
+    # Laplacian grows with image resolution, so resize every image (both
+    # up- and down-scaling) so its longer side matches a common target,
+    # preserving aspect ratio. This makes a single threshold comparable
+    # across images of any original size.
+    ratio = max(image.width, image.height) / TARGET_RESOLUTION_FOR_BLURRY_DETECTION
+    if ratio != 1:
         image = image.resize(
-            (max(int(image.width // ratio), 1), max(int(image.height // ratio), 1))
+            (max(round(image.width / ratio), 1), max(round(image.height / ratio), 1))
         )
 
     gray = image.convert("L")
-    edges = gray.filter(ImageFilter.FIND_EDGES)
-    var = ImageStat.Stat(edges).var[0]
-    return float(np.sqrt(var))
+    # PIL's FIND_EDGES applies a 3x3 Laplacian kernel.
+    laplacian = gray.filter(ImageFilter.FIND_EDGES)
+    return float(ImageStat.Stat(laplacian).var[0])
 
 
 @OPERATORS.register_module("image_blurriness_filter")
