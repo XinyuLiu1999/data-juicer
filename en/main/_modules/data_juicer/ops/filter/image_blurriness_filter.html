@@ -520,22 +520,27 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">..base_op</span><span class="w"> </span><span class="kn">import</span> <span class="n">OPERATORS</span><span class="p">,</span> <span class="n">Filter</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">..op_fusion</span><span class="w"> </span><span class="kn">import</span> <span class="n">LOADED_IMAGES</span>
 
-<span class="n">MAX_RESOLUTION_FOR_BLURRY_DETECTION</span> <span class="o">=</span> <span class="mi">512</span>
+<span class="n">TARGET_RESOLUTION_FOR_BLURRY_DETECTION</span> <span class="o">=</span> <span class="mi">512</span>
 
 
 <div class="viewcode-block" id="calc_blurriness">
 <a class="viewcode-back" href="../../../../api/data_juicer.ops.filter.image_blurriness_filter.html#data_juicer.ops.filter.calc_blurriness">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">calc_blurriness</span><span class="p">(</span><span class="n">image</span><span class="p">):</span>
-    <span class="n">ratio</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">width</span><span class="p">,</span> <span class="n">image</span><span class="o">.</span><span class="n">height</span><span class="p">)</span> <span class="o">/</span> <span class="n">MAX_RESOLUTION_FOR_BLURRY_DETECTION</span>
-    <span class="k">if</span> <span class="n">ratio</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+    <span class="c1"># Scale-normalize before measuring sharpness: the variance of the</span>
+    <span class="c1"># Laplacian grows with image resolution, so resize every image (both</span>
+    <span class="c1"># up- and down-scaling) so its longer side matches a common target,</span>
+    <span class="c1"># preserving aspect ratio. This makes a single threshold comparable</span>
+    <span class="c1"># across images of any original size.</span>
+    <span class="n">ratio</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">width</span><span class="p">,</span> <span class="n">image</span><span class="o">.</span><span class="n">height</span><span class="p">)</span> <span class="o">/</span> <span class="n">TARGET_RESOLUTION_FOR_BLURRY_DETECTION</span>
+    <span class="k">if</span> <span class="n">ratio</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
         <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span>
-            <span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">width</span> <span class="o">//</span> <span class="n">ratio</span><span class="p">),</span> <span class="mi">1</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">height</span> <span class="o">//</span> <span class="n">ratio</span><span class="p">),</span> <span class="mi">1</span><span class="p">))</span>
+            <span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">width</span> <span class="o">/</span> <span class="n">ratio</span><span class="p">),</span> <span class="mi">1</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">height</span> <span class="o">/</span> <span class="n">ratio</span><span class="p">),</span> <span class="mi">1</span><span class="p">))</span>
         <span class="p">)</span>
 
     <span class="n">gray</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s2">&quot;L&quot;</span><span class="p">)</span>
-    <span class="n">edges</span> <span class="o">=</span> <span class="n">gray</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">ImageFilter</span><span class="o">.</span><span class="n">FIND_EDGES</span><span class="p">)</span>
-    <span class="n">var</span> <span class="o">=</span> <span class="n">ImageStat</span><span class="o">.</span><span class="n">Stat</span><span class="p">(</span><span class="n">edges</span><span class="p">)</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-    <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">var</span><span class="p">))</span></div>
+    <span class="c1"># PIL&#39;s FIND_EDGES applies a 3x3 Laplacian kernel.</span>
+    <span class="n">laplacian</span> <span class="o">=</span> <span class="n">gray</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">ImageFilter</span><span class="o">.</span><span class="n">FIND_EDGES</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">ImageStat</span><span class="o">.</span><span class="n">Stat</span><span class="p">(</span><span class="n">laplacian</span><span class="p">)</span><span class="o">.</span><span class="n">var</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span></div>
 
 
 
