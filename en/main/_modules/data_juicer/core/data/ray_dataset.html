@@ -720,6 +720,183 @@
 
 
 
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Unified OCR preprocessing</span>
+<span class="c1">#</span>
+<span class="c1"># One preprocessor for a family of heterogeneous OCR / grounding parquet</span>
+<span class="c1"># datasets (c4web, docmatix, blip3, ocr_0926, wukong, zhihu_box/pure,</span>
+<span class="c1"># laion_hehe, ...). It auto-detects the content and image columns per source</span>
+<span class="c1"># and normalises them into the standard Data-Juicer format (``text`` /</span>
+<span class="c1"># ``images`` / ``image_bytes``), so a single config works for every source</span>
+<span class="c1"># (one DJ run per source; a single Ray dataset must have one schema).</span>
+<span class="c1">#</span>
+<span class="c1"># Column-name candidates mirror collect_unified_ocr.py.</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="n">UNIFIED_CONTENT_COLS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;clean_content&quot;</span><span class="p">,</span> <span class="s2">&quot;origin_content&quot;</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">]</span>
+<span class="n">UNIFIED_IMG_LIST_COLS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;image_buffer_list&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">]</span>   <span class="c1"># list&lt;struct{...}&gt;</span>
+<span class="n">UNIFIED_IMG_BIN_COLS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;img_bytes&quot;</span><span class="p">,</span> <span class="s2">&quot;img_byte&quot;</span><span class="p">]</span>     <span class="c1"># flat binary (one/row)</span>
+<span class="n">UNIFIED_IMG_BYTE_FIELDS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;buffer&quot;</span><span class="p">,</span> <span class="s2">&quot;image_bytes&quot;</span><span class="p">,</span> <span class="s2">&quot;img_bytes&quot;</span><span class="p">]</span>  <span class="c1"># in struct</span>
+
+
+<div class="viewcode-block" id="detect_unified_ocr_columns">
+<a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.detect_unified_ocr_columns">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">detect_unified_ocr_columns</span><span class="p">(</span><span class="n">columns</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Detect (content_col, image_col, image_type) from a set of column names.</span>
+
+<span class="sd">    ``image_type`` is ``&quot;list&quot;`` for list-of-struct image columns</span>
+<span class="sd">    (``image_buffer_list`` / ``&quot;1&quot;``) or ``&quot;binary&quot;`` for flat binary columns</span>
+<span class="sd">    (``img_bytes`` / ``img_byte``). Any of the three may be ``None`` when not</span>
+<span class="sd">    found; callers decide whether that means &quot;skip&quot; or &quot;error&quot;.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">content_col</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">UNIFIED_CONTENT_COLS</span> <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">UNIFIED_IMG_LIST_COLS</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">content_col</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="s2">&quot;list&quot;</span>
+    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">UNIFIED_IMG_BIN_COLS</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">content_col</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="s2">&quot;binary&quot;</span>
+    <span class="k">return</span> <span class="n">content_col</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_pick_struct_field</span><span class="p">(</span><span class="n">flattened</span><span class="p">,</span> <span class="n">field_names</span><span class="p">,</span> <span class="n">candidates</span><span class="p">,</span> <span class="n">arrow_type</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the first struct field in ``candidates`` present on the flattened</span>
+<span class="sd">    struct array, or an all-null array of ``arrow_type`` if none match.&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">candidates</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">field_names</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">flattened</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">nulls</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">flattened</span><span class="p">),</span> <span class="nb">type</span><span class="o">=</span><span class="n">arrow_type</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_synth_ids</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Synthesise ``n`` positional image IDs. IDs are only used downstream as</span>
+<span class="sd">    per-sample dict keys (the raw bytes are the real payload), so positional</span>
+<span class="sd">    values guarantee uniqueness within a sample regardless of source schema.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">.jpg&quot;</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">())</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_flatten_struct_images</span><span class="p">(</span><span class="n">buf_chunked</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Flatten a list&lt;struct{buffer/image_id/...}&gt; column into</span>
+<span class="sd">    ``(images, image_bytes, img_counts)`` chunked arrays, zero-copy per chunk</span>
+<span class="sd">    (mirrors preprocess_laioncoco_ray). Only the *bytes* field name is</span>
+<span class="sd">    generalised across sources; IDs are synthesised positionally.&quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow.compute</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pc</span>
+
+    <span class="n">id_chunks</span><span class="p">,</span> <span class="n">byte_chunks</span><span class="p">,</span> <span class="n">count_chunks</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">buf_chunked</span><span class="o">.</span><span class="n">chunks</span><span class="p">:</span>
+        <span class="n">offsets</span> <span class="o">=</span> <span class="n">chunk</span><span class="o">.</span><span class="n">offsets</span>
+        <span class="n">flattened</span> <span class="o">=</span> <span class="n">chunk</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">flattened</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">flattened</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">num_fields</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">field_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">flattened</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">.</span><span class="n">name</span>
+                           <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">flattened</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">num_fields</span><span class="p">)]</span>
+            <span class="n">bts</span> <span class="o">=</span> <span class="n">_pick_struct_field</span><span class="p">(</span><span class="n">flattened</span><span class="p">,</span> <span class="n">field_names</span><span class="p">,</span>
+                                     <span class="n">UNIFIED_IMG_BYTE_FIELDS</span><span class="p">,</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">binary</span><span class="p">())</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">bts</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">binary</span><span class="p">())</span>
+
+        <span class="c1"># Zero-base offsets: sliced chunks (from Ray batching) may start at a</span>
+        <span class="c1"># non-zero offset while flatten() returns only this slice&#39;s values.</span>
+        <span class="n">first_offset</span> <span class="o">=</span> <span class="n">offsets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">as_py</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">first_offset</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">offsets</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">subtract</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">first_offset</span><span class="p">)</span>
+
+        <span class="n">byte_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">bts</span><span class="p">))</span>
+        <span class="n">id_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">_synth_ids</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">bts</span><span class="p">))))</span>
+        <span class="n">count_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">pc</span><span class="o">.</span><span class="n">subtract</span><span class="p">(</span><span class="n">offsets</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int64</span><span class="p">()),</span>
+                        <span class="n">offsets</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int64</span><span class="p">())))</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span><span class="n">id_chunks</span><span class="p">),</span>
+            <span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span><span class="n">byte_chunks</span><span class="p">),</span>
+            <span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span><span class="n">count_chunks</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_flatten_binary_images</span><span class="p">(</span><span class="n">bin_chunked</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wrap a flat binary image column (one image per row) into</span>
+<span class="sd">    ``(images, image_bytes, img_counts)`` chunked arrays. Null rows become</span>
+<span class="sd">    empty lists (0 images, 0 tokens) so token count stays aligned with the</span>
+<span class="sd">    number of images actually present.&quot;&quot;&quot;</span>
+    <span class="n">id_chunks</span><span class="p">,</span> <span class="n">byte_chunks</span><span class="p">,</span> <span class="n">count_chunks</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">bin_chunked</span><span class="o">.</span><span class="n">chunks</span><span class="p">:</span>
+        <span class="n">valid</span> <span class="o">=</span> <span class="n">chunk</span><span class="o">.</span><span class="n">is_valid</span><span class="p">()</span><span class="o">.</span><span class="n">to_pylist</span><span class="p">()</span>
+        <span class="n">offsets_list</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">valid</span><span class="p">:</span>
+            <span class="n">offsets_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">offsets_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="k">if</span> <span class="n">v</span> <span class="k">else</span> <span class="mi">0</span><span class="p">))</span>
+        <span class="n">offsets</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">offsets_list</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int32</span><span class="p">())</span>
+
+        <span class="n">values</span> <span class="o">=</span> <span class="n">chunk</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">chunk</span><span class="o">.</span><span class="n">is_valid</span><span class="p">())</span>  <span class="c1"># drop null rows&#39; payload</span>
+        <span class="n">byte_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">values</span><span class="p">))</span>
+        <span class="n">id_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">_synth_ids</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">))))</span>
+        <span class="n">count_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span> <span class="k">if</span> <span class="n">v</span> <span class="k">else</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">valid</span><span class="p">],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int64</span><span class="p">()))</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span><span class="n">id_chunks</span><span class="p">),</span>
+            <span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span><span class="n">byte_chunks</span><span class="p">),</span>
+            <span class="n">pyarrow</span><span class="o">.</span><span class="n">chunked_array</span><span class="p">(</span><span class="n">count_chunks</span><span class="p">))</span>
+
+
+<div class="viewcode-block" id="preprocess_unified_ocr_ray">
+<a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.preprocess_unified_ocr_ray">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">preprocess_unified_ocr_ray</span><span class="p">(</span>
+    <span class="n">table</span><span class="p">:</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">Table</span><span class="p">,</span>
+    <span class="n">image_special_token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">content_col</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">image_col</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">image_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">Table</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Ray-compatible unified OCR preprocessing operating on PyArrow tables.</span>
+
+<span class="sd">    Normalises a heterogeneous OCR/grounding parquet schema into the format</span>
+<span class="sd">    expected by Data-Juicer:</span>
+<span class="sd">    - Extracts ``text`` from the ``content_col`` JSON string (key ``&quot;text&quot;``),</span>
+<span class="sd">      prepended with one image special token per image in the row.</span>
+<span class="sd">    - Flattens ``image_col`` into ``images`` (synthetic IDs) and ``image_bytes``</span>
+<span class="sd">      (raw bytes). Both list-of-struct and flat-binary image columns are</span>
+<span class="sd">      supported (``image_type`` = ``&quot;list&quot;`` / ``&quot;binary&quot;``).</span>
+
+<span class="sd">    ``content_col`` / ``image_col`` / ``image_type`` are resolved once by the</span>
+<span class="sd">    caller (see ``detect_unified_ocr_columns``) since a Ray dataset has a single</span>
+<span class="sd">    schema, avoiding per-batch re-detection.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">orjson</span>
+        <span class="n">_loads</span> <span class="o">=</span> <span class="n">orjson</span><span class="o">.</span><span class="n">loads</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+        <span class="n">_loads</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span>
+
+    <span class="k">if</span> <span class="n">image_type</span> <span class="o">==</span> <span class="s2">&quot;binary&quot;</span><span class="p">:</span>
+        <span class="n">images_col</span><span class="p">,</span> <span class="n">image_bytes_col</span><span class="p">,</span> <span class="n">img_counts</span> <span class="o">=</span> <span class="n">_flatten_binary_images</span><span class="p">(</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">column</span><span class="p">(</span><span class="n">image_col</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">images_col</span><span class="p">,</span> <span class="n">image_bytes_col</span><span class="p">,</span> <span class="n">img_counts</span> <span class="o">=</span> <span class="n">_flatten_struct_images</span><span class="p">(</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">column</span><span class="p">(</span><span class="n">image_col</span><span class="p">))</span>
+
+    <span class="c1"># --- Extract text from the content JSON (orjson accepts str and bytes) ---</span>
+    <span class="n">content_list</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">column</span><span class="p">(</span><span class="n">content_col</span><span class="p">)</span><span class="o">.</span><span class="n">to_pylist</span><span class="p">()</span>
+    <span class="n">img_counts_list</span> <span class="o">=</span> <span class="n">img_counts</span><span class="o">.</span><span class="n">to_pylist</span><span class="p">()</span>
+    <span class="n">text_col</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">_safe_extract_text</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">cnt</span><span class="p">,</span> <span class="n">image_special_token</span><span class="p">,</span> <span class="n">_loads</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">raw</span><span class="p">,</span> <span class="n">cnt</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">content_list</span><span class="p">,</span> <span class="n">img_counts_list</span><span class="p">)</span>
+    <span class="p">]</span>
+
+    <span class="c1"># --- Build output table, dropping the consumed content + image columns.</span>
+    <span class="c1">#     Any other columns (e.g. uid, clip_score) pass through untouched. ---</span>
+    <span class="n">cols_to_keep</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">table</span><span class="o">.</span><span class="n">column_names</span>
+                    <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="n">content_col</span><span class="p">,</span> <span class="n">image_col</span><span class="p">)]</span>
+    <span class="n">out_table</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">cols_to_keep</span><span class="p">)</span>
+    <span class="n">out_table</span> <span class="o">=</span> <span class="n">out_table</span><span class="o">.</span><span class="n">append_column</span><span class="p">(</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">text_col</span><span class="p">))</span>
+    <span class="n">out_table</span> <span class="o">=</span> <span class="n">out_table</span><span class="o">.</span><span class="n">append_column</span><span class="p">(</span><span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="n">images_col</span><span class="p">)</span>
+    <span class="n">out_table</span> <span class="o">=</span> <span class="n">out_table</span><span class="o">.</span><span class="n">append_column</span><span class="p">(</span><span class="s2">&quot;image_bytes&quot;</span><span class="p">,</span> <span class="n">image_bytes_col</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">out_table</span></div>
+
+
+
 <div class="viewcode-block" id="preprocess_blip3o_ray">
 <a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.preprocess_blip3o_ray">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">preprocess_blip3o_ray</span><span class="p">(</span><span class="n">table</span><span class="p">:</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">Table</span><span class="p">,</span> <span class="n">image_special_token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">Table</span><span class="p">:</span>
@@ -969,6 +1146,49 @@
             <span class="n">columns</span><span class="o">.</span><span class="n">update</span><span class="p">([</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="s2">&quot;image_bytes&quot;</span><span class="p">])</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;LAION-COCO preprocessing already applied, skipping.&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">cfg</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;unified_ocr_preprocessing&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+        <span class="n">content_col</span><span class="p">,</span> <span class="n">image_col</span><span class="p">,</span> <span class="n">image_type</span> <span class="o">=</span> <span class="n">detect_unified_ocr_columns</span><span class="p">(</span><span class="n">columns</span><span class="p">)</span>
+        <span class="c1"># Skip if already preprocessed (text + image_bytes already present).</span>
+        <span class="n">already_applied</span> <span class="o">=</span> <span class="s2">&quot;text&quot;</span> <span class="ow">in</span> <span class="n">columns</span> <span class="ow">and</span> <span class="s2">&quot;image_bytes&quot;</span> <span class="ow">in</span> <span class="n">columns</span>
+        <span class="k">if</span> <span class="n">content_col</span> <span class="ow">and</span> <span class="n">image_col</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">already_applied</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.mm_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpecialTokens</span>
+
+            <span class="n">preprocessing_num_cpus</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+                <span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;unified_ocr_preprocessing_num_cpus&quot;</span><span class="p">,</span> <span class="mf">0.25</span>
+            <span class="p">)</span>
+            <span class="n">preprocessing_batch_size</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+                <span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;unified_ocr_preprocessing_batch_size&quot;</span><span class="p">,</span>
+                <span class="n">DEFAULT_BATCH_SIZE</span>
+            <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Applying unified OCR preprocessing for Ray dataset &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;(content=&#39;</span><span class="si">{</span><span class="n">content_col</span><span class="si">}</span><span class="s2">&#39;, image=&#39;</span><span class="si">{</span><span class="n">image_col</span><span class="si">}</span><span class="s2">&#39; (</span><span class="si">{</span><span class="n">image_type</span><span class="si">}</span><span class="s2">), &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;num_cpus=</span><span class="si">{</span><span class="n">preprocessing_num_cpus</span><span class="si">}</span><span class="s2">, &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;batch_size=</span><span class="si">{</span><span class="n">preprocessing_batch_size</span><span class="si">}</span><span class="s2">)...&quot;</span>
+            <span class="p">)</span>
+            <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">map_batches</span><span class="p">(</span>
+                <span class="n">partial</span><span class="p">(</span><span class="n">preprocess_unified_ocr_ray</span><span class="p">,</span>
+                        <span class="n">image_special_token</span><span class="o">=</span><span class="n">SpecialTokens</span><span class="o">.</span><span class="n">image</span><span class="p">,</span>
+                        <span class="n">content_col</span><span class="o">=</span><span class="n">content_col</span><span class="p">,</span>
+                        <span class="n">image_col</span><span class="o">=</span><span class="n">image_col</span><span class="p">,</span>
+                        <span class="n">image_type</span><span class="o">=</span><span class="n">image_type</span><span class="p">),</span>
+                <span class="n">batch_format</span><span class="o">=</span><span class="s2">&quot;pyarrow&quot;</span><span class="p">,</span>
+                <span class="n">batch_size</span><span class="o">=</span><span class="n">preprocessing_batch_size</span><span class="p">,</span>
+                <span class="n">num_cpus</span><span class="o">=</span><span class="n">preprocessing_num_cpus</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="c1"># Update columns to reflect unified OCR preprocessing changes</span>
+            <span class="n">columns</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="n">content_col</span><span class="p">)</span>
+            <span class="n">columns</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="n">image_col</span><span class="p">)</span>
+            <span class="n">columns</span><span class="o">.</span><span class="n">update</span><span class="p">([</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="s2">&quot;image_bytes&quot;</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="n">already_applied</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Unified OCR preprocessing already applied, skipping.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Unified OCR preprocessing enabled but could not detect &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;columns (content=</span><span class="si">{</span><span class="n">content_col</span><span class="si">}</span><span class="s2">, image=</span><span class="si">{</span><span class="n">image_col</span><span class="si">}</span><span class="s2">); &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;available columns: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">. Skipping.&quot;</span>
+            <span class="p">)</span>
 
     <span class="k">if</span> <span class="n">cfg</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="s2">&quot;blip3o_preprocessing&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
         <span class="c1"># Skip if preprocessing was already applied (jpg column removed)</span>

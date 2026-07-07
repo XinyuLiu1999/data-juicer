@@ -551,6 +551,36 @@ which is the main performance bottleneck for large tables.</p>
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="data_juicer.core.data.ray_dataset.detect_unified_ocr_columns">
+<span class="sig-prename descclassname"><span class="pre">data_juicer.core.data.ray_dataset.</span></span><span class="sig-name descname"><span class="pre">detect_unified_ocr_columns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">columns</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/data_juicer/core/data/ray_dataset.html#detect_unified_ocr_columns"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.core.data.ray_dataset.detect_unified_ocr_columns" title="Link to this definition">#</a></dt>
+<dd><p>Detect (content_col, image_col, image_type) from a set of column names.</p>
+<p><code class="docutils literal notranslate"><span class="pre">image_type</span></code> is <code class="docutils literal notranslate"><span class="pre">&quot;list&quot;</span></code> for list-of-struct image columns
+(<code class="docutils literal notranslate"><span class="pre">image_buffer_list</span></code> / <code class="docutils literal notranslate"><span class="pre">&quot;1&quot;</span></code>) or <code class="docutils literal notranslate"><span class="pre">&quot;binary&quot;</span></code> for flat binary columns
+(<code class="docutils literal notranslate"><span class="pre">img_bytes</span></code> / <code class="docutils literal notranslate"><span class="pre">img_byte</span></code>). Any of the three may be <code class="docutils literal notranslate"><span class="pre">None</span></code> when not
+found; callers decide whether that means “skip” or “error”.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="data_juicer.core.data.ray_dataset.preprocess_unified_ocr_ray">
+<span class="sig-prename descclassname"><span class="pre">data_juicer.core.data.ray_dataset.</span></span><span class="sig-name descname"><span class="pre">preprocess_unified_ocr_ray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_special_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">content_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_col</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Table</span></span></span><a class="reference internal" href="../_modules/data_juicer/core/data/ray_dataset.html#preprocess_unified_ocr_ray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.core.data.ray_dataset.preprocess_unified_ocr_ray" title="Link to this definition">#</a></dt>
+<dd><p>Ray-compatible unified OCR preprocessing operating on PyArrow tables.</p>
+<p>Normalises a heterogeneous OCR/grounding parquet schema into the format
+expected by Data-Juicer:
+- Extracts <code class="docutils literal notranslate"><span class="pre">text</span></code> from the <code class="docutils literal notranslate"><span class="pre">content_col</span></code> JSON string (key <code class="docutils literal notranslate"><span class="pre">&quot;text&quot;</span></code>),</p>
+<blockquote>
+<div><p>prepended with one image special token per image in the row.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>Flattens <code class="docutils literal notranslate"><span class="pre">image_col</span></code> into <code class="docutils literal notranslate"><span class="pre">images</span></code> (synthetic IDs) and <code class="docutils literal notranslate"><span class="pre">image_bytes</span></code>
+(raw bytes). Both list-of-struct and flat-binary image columns are
+supported (<code class="docutils literal notranslate"><span class="pre">image_type</span></code> = <code class="docutils literal notranslate"><span class="pre">&quot;list&quot;</span></code> / <code class="docutils literal notranslate"><span class="pre">&quot;binary&quot;</span></code>).</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">content_col</span></code> / <code class="docutils literal notranslate"><span class="pre">image_col</span></code> / <code class="docutils literal notranslate"><span class="pre">image_type</span></code> are resolved once by the
+caller (see <code class="docutils literal notranslate"><span class="pre">detect_unified_ocr_columns</span></code>) since a Ray dataset has a single
+schema, avoiding per-batch re-detection.</p>
+</dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="data_juicer.core.data.ray_dataset.preprocess_blip3o_ray">
 <span class="sig-prename descclassname"><span class="pre">data_juicer.core.data.ray_dataset.</span></span><span class="sig-name descname"><span class="pre">preprocess_blip3o_ray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_special_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Table</span></span></span><a class="reference internal" href="../_modules/data_juicer/core/data/ray_dataset.html#preprocess_blip3o_ray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#data_juicer.core.data.ray_dataset.preprocess_blip3o_ray" title="Link to this definition">#</a></dt>
 <dd><p>Ray-compatible BLIP3o WebDataset preprocessing operating on PyArrow tables.</p>
@@ -759,6 +789,8 @@ assertion errors.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.convert_to_absolute_paths"><code class="docutils literal notranslate"><span class="pre">convert_to_absolute_paths()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.set_dataset_to_absolute_path"><code class="docutils literal notranslate"><span class="pre">set_dataset_to_absolute_path()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_laioncoco_ray"><code class="docutils literal notranslate"><span class="pre">preprocess_laioncoco_ray()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.detect_unified_ocr_columns"><code class="docutils literal notranslate"><span class="pre">detect_unified_ocr_columns()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_unified_ocr_ray"><code class="docutils literal notranslate"><span class="pre">preprocess_unified_ocr_ray()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_blip3o_ray"><code class="docutils literal notranslate"><span class="pre">preprocess_blip3o_ray()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_taisu_ray"><code class="docutils literal notranslate"><span class="pre">preprocess_taisu_ray()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data_juicer.core.data.ray_dataset.preprocess_danqing_ray"><code class="docutils literal notranslate"><span class="pre">preprocess_danqing_ray()</span></code></a></li>

@@ -1002,6 +1002,32 @@
                 <span class="s2">&quot;Larger values amortize per-batch overhead but use more memory.&quot;</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+                <span class="s2">&quot;--unified_ocr_preprocessing&quot;</span><span class="p">,</span>
+                <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Enable unified OCR preprocessing (Ray executor only). &quot;</span>  <span class="c1"># noqa: E251</span>
+                <span class="s2">&quot;Auto-detects the content column (clean_content / origin_content &quot;</span>
+                <span class="s2">&quot;/ &#39;0&#39;) and image column (image_buffer_list / &#39;1&#39; list-of-struct, &quot;</span>
+                <span class="s2">&quot;or img_bytes / img_byte flat binary), extracts &#39;text&#39; from the &quot;</span>
+                <span class="s2">&quot;content JSON, and flattens images into &#39;images&#39; (IDs) and &quot;</span>
+                <span class="s2">&quot;&#39;image_bytes&#39; (raw bytes). One DJ run per source (a Ray dataset &quot;</span>
+                <span class="s2">&quot;must have a single schema).&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+                <span class="s2">&quot;--unified_ocr_preprocessing_num_cpus&quot;</span><span class="p">,</span>
+                <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
+                <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Number of CPUs per preprocessing task for unified OCR &quot;</span>  <span class="c1"># noqa: E251</span>
+                <span class="s2">&quot;format. Lower values (e.g. 0.25) allow more concurrent tasks.&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+                <span class="s2">&quot;--unified_ocr_preprocessing_batch_size&quot;</span><span class="p">,</span>
+                <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+                <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Batch size for unified OCR preprocessing map_batches. &quot;</span>  <span class="c1"># noqa: E251</span>
+                <span class="s2">&quot;Larger values amortize per-batch overhead but use more memory.&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
                 <span class="s2">&quot;--use_cache&quot;</span><span class="p">,</span>
                 <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
                 <span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
