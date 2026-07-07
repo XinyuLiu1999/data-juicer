@@ -304,6 +304,16 @@ class StatsKeysConstant(object):
     image_maniqa_scores = "image_maniqa_scores"
     image_aigc_score = "image_aigc_score"
     image_border_variance_scores = "image_border_variance_scores"
+    # SigLIP 2 zero-shot document-domain scoring
+    image_document_domain_score = "image_document_domain_score"  # biz score (summed positive-domain mass)
+    image_document_domain = "image_document_domain"  # argmax positive domain label
+    # per-domain softmax probabilities (one column per positive domain)
+    image_domain_score_slide = "image_domain_score_slide"
+    image_domain_score_chart = "image_domain_score_chart"
+    image_domain_score_webpage = "image_domain_score_webpage"
+    image_domain_score_poster = "image_domain_score_poster"
+    image_domain_score_sci_figure = "image_domain_score_sci_figure"
+    image_domain_score_infographic = "image_domain_score_infographic"
 
     #  === audios ===
     audio_duration = "audio_duration"
