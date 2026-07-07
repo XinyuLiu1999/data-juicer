@@ -748,6 +748,63 @@ def filter_batch(batch, filter_func):
     return batch.filter(mask)
 
 
+def _is_valid_parquet(path):
+    """True if ``path`` has a readable Parquet footer (metadata)."""
+    try:
+        import pyarrow.parquet as pq
+
+        pq.ParquetFile(path).metadata
+        return True
+    except Exception as e:
+        logger.warning(f"Skipping unreadable parquet shard {path}: {e}")
+        return False
+
+
+def filter_valid_parquet(paths):
+    """Expand ``paths`` (a local dir, file, or list) into individual parquet
+    files and drop any with a corrupt/truncated footer, validating in parallel.
+
+    Returns a list of good file paths. Remote paths are returned unchanged (the
+    footer check only works on the local filesystem). Raises if every shard is
+    unreadable, since that almost certainly signals a path/permissions problem
+    rather than universal corruption.
+    """
+    import glob
+    from concurrent.futures import ThreadPoolExecutor
+
+    raw = paths if isinstance(paths, (list, tuple)) else [paths]
+    if any(is_remote_path(p) for p in raw):
+        return paths
+
+    files = []
+    for p in raw:
+        if os.path.isdir(p):
+            files.extend(sorted(glob.glob(os.path.join(p, "**", "*.parquet"), recursive=True)))
+        else:
+            files.append(p)
+    files = [f for f in files if not os.path.basename(f).startswith("_")]
+    if not files:
+        return paths  # nothing to validate; let ray.data surface the error
+
+    with ThreadPoolExecutor(max_workers=32) as ex:
+        valid_flags = list(ex.map(_is_valid_parquet, files))
+    good = [f for f, ok in zip(files, valid_flags) if ok]
+    skipped = len(files) - len(good)
+
+    if not good:
+        raise RuntimeError(
+            f"All {len(files)} parquet shards under {raw} failed the footer "
+            f"check. This usually means a wrong path or permissions issue, "
+            f"not universal corruption."
+        )
+    if skipped:
+        logger.warning(
+            f"Skipping {skipped}/{len(files)} corrupt parquet shard(s); "
+            f"reading the remaining {len(good)}."
+        )
+    return good
+
+
 class RayDataset(DJDataset):
     def __init__(
         self,
@@ -1012,6 +1069,14 @@ class RayDataset(DJDataset):
             "binary_files",
             "lance",
         }:
+            # Optionally drop corrupt/truncated parquet shards before reading.
+            # Ray's ParquetDatasource fetches every file's footer up front, so a
+            # single bad shard aborts the whole job with ArrowInvalid. Enable by
+            # setting DJ_SKIP_CORRUPT_PARQUET=1 (local paths only).
+            if data_format in {"parquet", "parquet_bulk"} and os.environ.get(
+                "DJ_SKIP_CORRUPT_PARQUET", ""
+            ).lower() in ("1", "true", "yes"):
+                paths = filter_valid_parquet(paths)
             return getattr(ray.data, f"read_{data_format}")(paths)
 
     @classmethod
