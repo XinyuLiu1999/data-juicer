@@ -480,6 +480,32 @@ def init_configs(args: Optional[List[str]] = None, which_entry: object = None, l
                 "Larger values amortize per-batch overhead but use more memory.",
             )
             parser.add_argument(
+                "--unified_ocr_preprocessing",
+                type=bool,
+                default=False,
+                help="Enable unified OCR preprocessing (Ray executor only). "  # noqa: E251
+                "Auto-detects the content column (clean_content / origin_content "
+                "/ '0') and image column (image_buffer_list / '1' list-of-struct, "
+                "or img_bytes / img_byte flat binary), extracts 'text' from the "
+                "content JSON, and flattens images into 'images' (IDs) and "
+                "'image_bytes' (raw bytes). One DJ run per source (a Ray dataset "
+                "must have a single schema).",
+            )
+            parser.add_argument(
+                "--unified_ocr_preprocessing_num_cpus",
+                type=float,
+                default=0.25,
+                help="Number of CPUs per preprocessing task for unified OCR "  # noqa: E251
+                "format. Lower values (e.g. 0.25) allow more concurrent tasks.",
+            )
+            parser.add_argument(
+                "--unified_ocr_preprocessing_batch_size",
+                type=int,
+                default=1000,
+                help="Batch size for unified OCR preprocessing map_batches. "  # noqa: E251
+                "Larger values amortize per-batch overhead but use more memory.",
+            )
+            parser.add_argument(
                 "--use_cache",
                 type=bool,
                 default=True,

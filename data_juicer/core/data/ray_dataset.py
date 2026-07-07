@@ -194,6 +194,177 @@ def preprocess_laioncoco_ray(table: pyarrow.Table, image_special_token: str) -> 
     return out_table
 
 
+# ---------------------------------------------------------------------------
+# Unified OCR preprocessing
+#
+# One preprocessor for a family of heterogeneous OCR / grounding parquet
+# datasets (c4web, docmatix, blip3, ocr_0926, wukong, zhihu_box/pure,
+# laion_hehe, ...). It auto-detects the content and image columns per source
+# and normalises them into the standard Data-Juicer format (``text`` /
+# ``images`` / ``image_bytes``), so a single config works for every source
+# (one DJ run per source; a single Ray dataset must have one schema).
+#
+# Column-name candidates mirror collect_unified_ocr.py.
+# ---------------------------------------------------------------------------
+UNIFIED_CONTENT_COLS = ["clean_content", "origin_content", "0"]
+UNIFIED_IMG_LIST_COLS = ["image_buffer_list", "1"]   # list<struct{...}>
+UNIFIED_IMG_BIN_COLS = ["img_bytes", "img_byte"]     # flat binary (one/row)
+UNIFIED_IMG_BYTE_FIELDS = ["buffer", "image_bytes", "img_bytes"]  # in struct
+
+
+def detect_unified_ocr_columns(columns):
+    """Detect (content_col, image_col, image_type) from a set of column names.
+
+    ``image_type`` is ``"list"`` for list-of-struct image columns
+    (``image_buffer_list`` / ``"1"``) or ``"binary"`` for flat binary columns
+    (``img_bytes`` / ``img_byte``). Any of the three may be ``None`` when not
+    found; callers decide whether that means "skip" or "error".
+    """
+    content_col = next((c for c in UNIFIED_CONTENT_COLS if c in columns), None)
+    for c in UNIFIED_IMG_LIST_COLS:
+        if c in columns:
+            return content_col, c, "list"
+    for c in UNIFIED_IMG_BIN_COLS:
+        if c in columns:
+            return content_col, c, "binary"
+    return content_col, None, None
+
+
+def _pick_struct_field(flattened, field_names, candidates, arrow_type):
+    """Return the first struct field in ``candidates`` present on the flattened
+    struct array, or an all-null array of ``arrow_type`` if none match."""
+    for name in candidates:
+        if name in field_names:
+            return flattened.field(name)
+    return pyarrow.nulls(len(flattened), type=arrow_type)
+
+
+def _synth_ids(n):
+    """Synthesise ``n`` positional image IDs. IDs are only used downstream as
+    per-sample dict keys (the raw bytes are the real payload), so positional
+    values guarantee uniqueness within a sample regardless of source schema."""
+    return pyarrow.array([f"{k}.jpg" for k in range(n)], type=pyarrow.string())
+
+
+def _flatten_struct_images(buf_chunked):
+    """Flatten a list<struct{buffer/image_id/...}> column into
+    ``(images, image_bytes, img_counts)`` chunked arrays, zero-copy per chunk
+    (mirrors preprocess_laioncoco_ray). Only the *bytes* field name is
+    generalised across sources; IDs are synthesised positionally."""
+    import pyarrow.compute as pc
+
+    id_chunks, byte_chunks, count_chunks = [], [], []
+    for chunk in buf_chunked.chunks:
+        offsets = chunk.offsets
+        flattened = chunk.flatten()
+
+        if len(flattened) > 0 and flattened.type.num_fields > 0:
+            field_names = [flattened.type.field(i).name
+                           for i in range(flattened.type.num_fields)]
+            bts = _pick_struct_field(flattened, field_names,
+                                     UNIFIED_IMG_BYTE_FIELDS, pyarrow.binary())
+        else:
+            bts = pyarrow.array([], type=pyarrow.binary())
+
+        # Zero-base offsets: sliced chunks (from Ray batching) may start at a
+        # non-zero offset while flatten() returns only this slice's values.
+        first_offset = offsets[0].as_py()
+        if first_offset != 0:
+            offsets = pc.subtract(offsets, first_offset)
+
+        byte_chunks.append(pyarrow.ListArray.from_arrays(offsets, bts))
+        id_chunks.append(
+            pyarrow.ListArray.from_arrays(offsets, _synth_ids(len(bts))))
+        count_chunks.append(
+            pc.subtract(offsets[1:].cast(pyarrow.int64()),
+                        offsets[:-1].cast(pyarrow.int64())))
+
+    return (pyarrow.chunked_array(id_chunks),
+            pyarrow.chunked_array(byte_chunks),
+            pyarrow.chunked_array(count_chunks))
+
+
+def _flatten_binary_images(bin_chunked):
+    """Wrap a flat binary image column (one image per row) into
+    ``(images, image_bytes, img_counts)`` chunked arrays. Null rows become
+    empty lists (0 images, 0 tokens) so token count stays aligned with the
+    number of images actually present."""
+    id_chunks, byte_chunks, count_chunks = [], [], []
+    for chunk in bin_chunked.chunks:
+        valid = chunk.is_valid().to_pylist()
+        offsets_list = [0]
+        for v in valid:
+            offsets_list.append(offsets_list[-1] + (1 if v else 0))
+        offsets = pyarrow.array(offsets_list, type=pyarrow.int32())
+
+        values = chunk.filter(chunk.is_valid())  # drop null rows' payload
+        byte_chunks.append(pyarrow.ListArray.from_arrays(offsets, values))
+        id_chunks.append(
+            pyarrow.ListArray.from_arrays(offsets, _synth_ids(len(values))))
+        count_chunks.append(
+            pyarrow.array([1 if v else 0 for v in valid], type=pyarrow.int64()))
+
+    return (pyarrow.chunked_array(id_chunks),
+            pyarrow.chunked_array(byte_chunks),
+            pyarrow.chunked_array(count_chunks))
+
+
+def preprocess_unified_ocr_ray(
+    table: pyarrow.Table,
+    image_special_token: str,
+    content_col: str,
+    image_col: str,
+    image_type: str,
+) -> pyarrow.Table:
+    """
+    Ray-compatible unified OCR preprocessing operating on PyArrow tables.
+
+    Normalises a heterogeneous OCR/grounding parquet schema into the format
+    expected by Data-Juicer:
+    - Extracts ``text`` from the ``content_col`` JSON string (key ``"text"``),
+      prepended with one image special token per image in the row.
+    - Flattens ``image_col`` into ``images`` (synthetic IDs) and ``image_bytes``
+      (raw bytes). Both list-of-struct and flat-binary image columns are
+      supported (``image_type`` = ``"list"`` / ``"binary"``).
+
+    ``content_col`` / ``image_col`` / ``image_type`` are resolved once by the
+    caller (see ``detect_unified_ocr_columns``) since a Ray dataset has a single
+    schema, avoiding per-batch re-detection.
+    """
+    try:
+        import orjson
+        _loads = orjson.loads
+    except ImportError:
+        import json
+        _loads = json.loads
+
+    if image_type == "binary":
+        images_col, image_bytes_col, img_counts = _flatten_binary_images(
+            table.column(image_col))
+    else:
+        images_col, image_bytes_col, img_counts = _flatten_struct_images(
+            table.column(image_col))
+
+    # --- Extract text from the content JSON (orjson accepts str and bytes) ---
+    content_list = table.column(content_col).to_pylist()
+    img_counts_list = img_counts.to_pylist()
+    text_col = [
+        _safe_extract_text(raw, cnt, image_special_token, _loads)
+        for raw, cnt in zip(content_list, img_counts_list)
+    ]
+
+    # --- Build output table, dropping the consumed content + image columns.
+    #     Any other columns (e.g. uid, clip_score) pass through untouched. ---
+    cols_to_keep = [name for name in table.column_names
+                    if name not in (content_col, image_col)]
+    out_table = table.select(cols_to_keep)
+    out_table = out_table.append_column("text", pyarrow.array(text_col))
+    out_table = out_table.append_column("images", images_col)
+    out_table = out_table.append_column("image_bytes", image_bytes_col)
+
+    return out_table
+
+
 def preprocess_blip3o_ray(table: pyarrow.Table, image_special_token: str) -> pyarrow.Table:
     """
     Ray-compatible BLIP3o WebDataset preprocessing operating on PyArrow tables.
@@ -432,6 +603,49 @@ def preprocess_dataset(dataset: ray.data.Dataset, dataset_path, cfg):
             columns.update(["text", "images", "image_bytes"])
         else:
             logger.info("LAION-COCO preprocessing already applied, skipping.")
+
+    if cfg and getattr(cfg, "unified_ocr_preprocessing", False):
+        content_col, image_col, image_type = detect_unified_ocr_columns(columns)
+        # Skip if already preprocessed (text + image_bytes already present).
+        already_applied = "text" in columns and "image_bytes" in columns
+        if content_col and image_col and not already_applied:
+            from data_juicer.utils.mm_utils import SpecialTokens
+
+            preprocessing_num_cpus = getattr(
+                cfg, "unified_ocr_preprocessing_num_cpus", 0.25
+            )
+            preprocessing_batch_size = getattr(
+                cfg, "unified_ocr_preprocessing_batch_size",
+                DEFAULT_BATCH_SIZE
+            )
+            logger.info(
+                f"Applying unified OCR preprocessing for Ray dataset "
+                f"(content='{content_col}', image='{image_col}' ({image_type}), "
+                f"num_cpus={preprocessing_num_cpus}, "
+                f"batch_size={preprocessing_batch_size})..."
+            )
+            dataset = dataset.map_batches(
+                partial(preprocess_unified_ocr_ray,
+                        image_special_token=SpecialTokens.image,
+                        content_col=content_col,
+                        image_col=image_col,
+                        image_type=image_type),
+                batch_format="pyarrow",
+                batch_size=preprocessing_batch_size,
+                num_cpus=preprocessing_num_cpus,
+            )
+            # Update columns to reflect unified OCR preprocessing changes
+            columns.discard(content_col)
+            columns.discard(image_col)
+            columns.update(["text", "images", "image_bytes"])
+        elif already_applied:
+            logger.info("Unified OCR preprocessing already applied, skipping.")
+        else:
+            logger.warning(
+                f"Unified OCR preprocessing enabled but could not detect "
+                f"columns (content={content_col}, image={image_col}); "
+                f"available columns: {sorted(columns)}. Skipping."
+            )
 
     if cfg and getattr(cfg, "blip3o_preprocessing", False):
         # Skip if preprocessing was already applied (jpg column removed)

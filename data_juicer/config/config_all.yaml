@@ -58,6 +58,7 @@ cache_compress: null                                        # the compression me
 adaptive_batch_size: false                                  # whether to use adaptive batch sizes for each OP according to the probed results. It's False in default.
 laioncoco_preprocessing: false                              # Enable LAION-COCO format preprocessing. Extracts 'text' from 'clean_content' JSON, flattens 'image_buffer_list' into image_key (IDs) and image_bytes_key (raw bytes).
 blip3o_preprocessing: false                                 # Enable BLIP3o WebDataset format preprocessing. Converts 'jpg' to 'image_bytes', creates 'images' IDs from '__key__', renames 'txt' to 'text'.
+unified_ocr_preprocessing: false                            # Enable unified OCR preprocessing (Ray only). Auto-detects content ('clean_content'/'origin_content'/'0') and image ('image_buffer_list'/'1' list-of-struct, or 'img_bytes'/'img_byte' binary) columns, extracts 'text' from content JSON, flattens images into 'images' (IDs) and 'image_bytes'. One run per source (single-schema Ray dataset).
 
 # for multimodal data processing
 image_key: 'images'                                         # key name of field to store the list of sample image paths.
