@@ -299,7 +299,14 @@ class RayLocalJsonDataLoadStrategy(RayDataLoadStrategy):
             read_kwargs["decoder"] = _blip3o_decoder
 
         try:
-            dataset = RayDataset.read(data_format, path, **read_kwargs)
+            if (
+                data_format == "parquet"
+                and self.cfg
+                and getattr(self.cfg, "unified_ocr_preprocessing", False)
+            ):
+                dataset = RayDataset.read_unified_ocr_parquet(path)
+            else:
+                dataset = RayDataset.read(data_format, path, **read_kwargs)
             return RayDataset(dataset, dataset_path=path, cfg=self.cfg)
         except Exception as e:
             if auto_detect:

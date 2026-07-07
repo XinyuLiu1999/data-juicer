@@ -73,6 +73,24 @@ class RayDatasetFuncsTest(DataJuicerTestCaseBase):
         result = self.get_abs_path(remote_path, dataset_dir)
         self.assertEqual(result, remote_path)
 
+    def test_infer_unified_ocr_read_columns(self):
+        """Test unified OCR column projection from Parquet metadata."""
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        from data_juicer.core.data.ray_dataset import infer_unified_ocr_read_columns
+
+        path = os.path.join(self.tmp_dir, "unified_ocr.parquet")
+        table = pa.table(
+            {
+                "0": pa.array(['{"text":"hello"}']),
+                "1": pa.array([[{"buffer": b"abc"}]]),
+                "unused_nested": pa.array([[{"value": 1}]]),
+            }
+        )
+        pq.write_table(table, path)
+
+        self.assertEqual(infer_unified_ocr_read_columns(path), ["0", "1"])
+
     @TEST_TAG('ray')
     def test_convert_to_absolute_paths(self):
         """Test convert_to_absolute_paths function"""

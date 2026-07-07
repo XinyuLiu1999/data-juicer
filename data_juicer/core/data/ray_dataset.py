@@ -212,6 +212,51 @@ UNIFIED_IMG_BIN_COLS = ["img_bytes", "img_byte"]     # flat binary (one/row)
 UNIFIED_IMG_BYTE_FIELDS = ["buffer", "image_bytes", "img_bytes"]  # in struct
 
 
+def _iter_local_parquet_files(paths):
+    """Yield local Parquet files under ``paths`` without touching row data."""
+    import glob
+
+    raw = paths if isinstance(paths, (list, tuple)) else [paths]
+    if any(is_remote_path(p) for p in raw):
+        return
+    for path in raw:
+        if os.path.isdir(path):
+            yield from (
+                f
+                for f in sorted(
+                    glob.glob(os.path.join(path, "**", "*.parquet"), recursive=True)
+                )
+                if not os.path.basename(f).startswith("_")
+            )
+        elif path.endswith(".parquet") and not os.path.basename(path).startswith("_"):
+            yield path
+
+
+def infer_unified_ocr_read_columns(paths) -> Optional[List[str]]:
+    """Infer the minimal columns needed by unified OCR preprocessing.
+
+    Ray/PyArrow can fail while sampling metadata for unrelated nested columns.
+    Unified OCR only needs one content column and one image column, so resolve
+    those columns from Parquet footers and project them during ``read_parquet``.
+    """
+    import pyarrow.parquet as pq
+
+    for path in _iter_local_parquet_files(paths):
+        try:
+            schema_names = set(pq.ParquetFile(path).schema_arrow.names)
+        except Exception as e:
+            logger.warning(f"Could not inspect parquet schema for {path}: {e}")
+            continue
+        content_col, image_col, _ = detect_unified_ocr_columns(schema_names)
+        if content_col and image_col:
+            return [content_col, image_col]
+        logger.warning(
+            f"Unified OCR could not detect required columns from {path}; "
+            f"available columns: {sorted(schema_names)}"
+        )
+    return None
+
+
 def detect_unified_ocr_columns(columns):
     """Detect (content_col, image_col, image_type) from a set of column names.
 
@@ -1050,6 +1095,28 @@ class RayDataset(DJDataset):
 
     def count(self) -> int:
         return self.data.count()
+
+    @classmethod
+    def read_unified_ocr_parquet(cls, paths: Union[str, List[str]]) -> RayDataset:
+        if os.environ.get("DJ_SKIP_CORRUPT_PARQUET", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            paths = filter_valid_parquet(paths)
+
+        columns = infer_unified_ocr_read_columns(paths)
+        if columns:
+            logger.info(
+                f"Reading parquet for unified OCR preprocessing with columns: {columns}"
+            )
+            return ray.data.read_parquet(paths, columns=columns)
+
+        logger.warning(
+            "Could not infer unified OCR columns before reading parquet; "
+            "falling back to Ray's default read_parquet behavior."
+        )
+        return ray.data.read_parquet(paths)
 
     @classmethod
     def read(cls, data_format: str, paths: Union[str, List[str]], **kwargs) -> RayDataset:
