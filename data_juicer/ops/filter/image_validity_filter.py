@@ -2,6 +2,7 @@ import io
 
 import numpy as np
 import PIL.Image
+from PIL import ImageFile
 
 from data_juicer.utils.constant import Fields, StatsKeys
 
@@ -17,13 +18,19 @@ class ImageValidityFilter(Filter):
     """Filter to drop samples whose images cannot be decoded (broken / truncated)
     or are animated (e.g. animated GIFs / WebP / APNG).
 
-    For each image this operator attempts a guarded PIL decode using the SAME
-    path as the downstream image ops (open + convert('RGB')). An image is kept
-    only if it (a) decodes successfully as a single still frame and (b) is not
-    animated (``n_frames`` <= 1). Decode failures are caught per image and never
-    propagate, so a broken image only drops its own sample instead of failing
-    the entire Ray batch. Per-image validity (1/0) is stored in the
-    'image_valid' stats field.
+    For each image this operator attempts a guarded PIL decode. An image is kept
+    only if it (a) decodes fully as a single still frame and (b) is not animated
+    (``n_frames`` <= 1). Decode failures are caught per image and never propagate,
+    so a broken image only drops its own sample instead of failing the entire Ray
+    batch. Per-image validity (1/0) is stored in the 'image_valid' stats field.
+
+    Truncated images are REJECTED. ``data_juicer`` sets
+    ``ImageFile.LOAD_TRUNCATED_IMAGES = True`` globally at import, which would let
+    an image missing scanlines gray-fill the tail and pass. This op forces that
+    flag off for the duration of its own decode (restoring it afterwards, so other
+    ops keep their lenient loading) so a truncated payload raises and is dropped
+    here rather than surviving into downstream stages (e.g. OCR) that use a strict
+    decode.
 
     Place this op FIRST in the process chain: it removes broken/animated images
     before later image ops try to load them, eliminating the whole-batch drops
@@ -49,7 +56,14 @@ class ImageValidityFilter(Filter):
 
     @staticmethod
     def _is_valid(raw):
-        """Return True iff `raw` (bytes or path) decodes as a single still frame."""
+        """Return True iff `raw` (bytes or path) decodes fully as a single still frame.
+
+        Truncated payloads raise here: LOAD_TRUNCATED_IMAGES is forced off around the
+        decode (data_juicer sets it True globally) and restored afterwards so only this
+        op's decode is strict.
+        """
+        prev = ImageFile.LOAD_TRUNCATED_IMAGES
+        ImageFile.LOAD_TRUNCATED_IMAGES = False
         try:
             if isinstance(raw, (bytes, bytearray, memoryview)):
                 img = PIL.Image.open(io.BytesIO(bytes(raw)))
@@ -58,12 +72,16 @@ class ImageValidityFilter(Filter):
             # animated images (GIF/WebP/APNG) expose n_frames > 1
             if getattr(img, "n_frames", 1) > 1 or getattr(img, "is_animated", False):
                 return False
-            # force a full decode (mirrors downstream load_image) to catch
-            # truncated/corrupt payloads that only fail past the header
+            # force a full decode of every scanline: with LOAD_TRUNCATED_IMAGES off this
+            # raises on truncated/corrupt payloads that only fail past the header, instead
+            # of gray-filling the missing tail and silently passing.
+            img.load()
             img.convert("RGB")
             return True
         except Exception:
             return False
+        finally:
+            ImageFile.LOAD_TRUNCATED_IMAGES = prev
 
     def compute_stats_single(self, sample, context=False):
         # check if it's computed already
