@@ -521,13 +521,18 @@
 <dd><p>Bases: <a class="reference internal" href="data_juicer.ops.base_op.html#data_juicer.ops.base_op.Filter" title="data_juicer.ops.base_op.Filter"><code class="xref py py-class docutils literal notranslate"><span class="pre">Filter</span></code></a></p>
 <p>Filter to drop samples whose images cannot be decoded (broken / truncated)
 or are animated (e.g. animated GIFs / WebP / APNG).</p>
-<p>For each image this operator attempts a guarded PIL decode using the SAME
-path as the downstream image ops (open + convert(‘RGB’)). An image is kept
-only if it (a) decodes successfully as a single still frame and (b) is not
-animated (<code class="docutils literal notranslate"><span class="pre">n_frames</span></code> &lt;= 1). Decode failures are caught per image and never
-propagate, so a broken image only drops its own sample instead of failing
-the entire Ray batch. Per-image validity (1/0) is stored in the
-‘image_valid’ stats field.</p>
+<p>For each image this operator attempts a guarded PIL decode. An image is kept
+only if it (a) decodes fully as a single still frame and (b) is not animated
+(<code class="docutils literal notranslate"><span class="pre">n_frames</span></code> &lt;= 1). Decode failures are caught per image and never propagate,
+so a broken image only drops its own sample instead of failing the entire Ray
+batch. Per-image validity (1/0) is stored in the ‘image_valid’ stats field.</p>
+<p>Truncated images are REJECTED. <code class="docutils literal notranslate"><span class="pre">data_juicer</span></code> sets
+<code class="docutils literal notranslate"><span class="pre">ImageFile.LOAD_TRUNCATED_IMAGES</span> <span class="pre">=</span> <span class="pre">True</span></code> globally at import, which would let
+an image missing scanlines gray-fill the tail and pass. This op forces that
+flag off for the duration of its own decode (restoring it afterwards, so other
+ops keep their lenient loading) so a truncated payload raises and is dropped
+here rather than surviving into downstream stages (e.g. OCR) that use a strict
+decode.</p>
 <p>Place this op FIRST in the process chain: it removes broken/animated images
 before later image ops try to load them, eliminating the whole-batch drops
 those ops would otherwise trigger on an undecodable image.</p>

@@ -516,6 +516,7 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">PIL.Image</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">PIL</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImageFile</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">data_juicer.utils.constant</span><span class="w"> </span><span class="kn">import</span> <span class="n">Fields</span><span class="p">,</span> <span class="n">StatsKeys</span>
 
@@ -533,13 +534,19 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Filter to drop samples whose images cannot be decoded (broken / truncated)</span>
 <span class="sd">    or are animated (e.g. animated GIFs / WebP / APNG).</span>
 
-<span class="sd">    For each image this operator attempts a guarded PIL decode using the SAME</span>
-<span class="sd">    path as the downstream image ops (open + convert(&#39;RGB&#39;)). An image is kept</span>
-<span class="sd">    only if it (a) decodes successfully as a single still frame and (b) is not</span>
-<span class="sd">    animated (``n_frames`` &lt;= 1). Decode failures are caught per image and never</span>
-<span class="sd">    propagate, so a broken image only drops its own sample instead of failing</span>
-<span class="sd">    the entire Ray batch. Per-image validity (1/0) is stored in the</span>
-<span class="sd">    &#39;image_valid&#39; stats field.</span>
+<span class="sd">    For each image this operator attempts a guarded PIL decode. An image is kept</span>
+<span class="sd">    only if it (a) decodes fully as a single still frame and (b) is not animated</span>
+<span class="sd">    (``n_frames`` &lt;= 1). Decode failures are caught per image and never propagate,</span>
+<span class="sd">    so a broken image only drops its own sample instead of failing the entire Ray</span>
+<span class="sd">    batch. Per-image validity (1/0) is stored in the &#39;image_valid&#39; stats field.</span>
+
+<span class="sd">    Truncated images are REJECTED. ``data_juicer`` sets</span>
+<span class="sd">    ``ImageFile.LOAD_TRUNCATED_IMAGES = True`` globally at import, which would let</span>
+<span class="sd">    an image missing scanlines gray-fill the tail and pass. This op forces that</span>
+<span class="sd">    flag off for the duration of its own decode (restoring it afterwards, so other</span>
+<span class="sd">    ops keep their lenient loading) so a truncated payload raises and is dropped</span>
+<span class="sd">    here rather than surviving into downstream stages (e.g. OCR) that use a strict</span>
+<span class="sd">    decode.</span>
 
 <span class="sd">    Place this op FIRST in the process chain: it removes broken/animated images</span>
 <span class="sd">    before later image ops try to load them, eliminating the whole-batch drops</span>
@@ -568,7 +575,14 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_valid</span><span class="p">(</span><span class="n">raw</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True iff `raw` (bytes or path) decodes as a single still frame.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True iff `raw` (bytes or path) decodes fully as a single still frame.</span>
+
+<span class="sd">        Truncated payloads raise here: LOAD_TRUNCATED_IMAGES is forced off around the</span>
+<span class="sd">        decode (data_juicer sets it True globally) and restored afterwards so only this</span>
+<span class="sd">        op&#39;s decode is strict.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">prev</span> <span class="o">=</span> <span class="n">ImageFile</span><span class="o">.</span><span class="n">LOAD_TRUNCATED_IMAGES</span>
+        <span class="n">ImageFile</span><span class="o">.</span><span class="n">LOAD_TRUNCATED_IMAGES</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="p">(</span><span class="nb">bytes</span><span class="p">,</span> <span class="nb">bytearray</span><span class="p">,</span> <span class="nb">memoryview</span><span class="p">)):</span>
                 <span class="n">img</span> <span class="o">=</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="nb">bytes</span><span class="p">(</span><span class="n">raw</span><span class="p">)))</span>
@@ -577,12 +591,16 @@
             <span class="c1"># animated images (GIF/WebP/APNG) expose n_frames &gt; 1</span>
             <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="s2">&quot;n_frames&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="s2">&quot;is_animated&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
                 <span class="k">return</span> <span class="kc">False</span>
-            <span class="c1"># force a full decode (mirrors downstream load_image) to catch</span>
-            <span class="c1"># truncated/corrupt payloads that only fail past the header</span>
+            <span class="c1"># force a full decode of every scanline: with LOAD_TRUNCATED_IMAGES off this</span>
+            <span class="c1"># raises on truncated/corrupt payloads that only fail past the header, instead</span>
+            <span class="c1"># of gray-filling the missing tail and silently passing.</span>
+            <span class="n">img</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
             <span class="n">img</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s2">&quot;RGB&quot;</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">ImageFile</span><span class="o">.</span><span class="n">LOAD_TRUNCATED_IMAGES</span> <span class="o">=</span> <span class="n">prev</span>
 
 <div class="viewcode-block" id="ImageValidityFilter.compute_stats_single">
 <a class="viewcode-back" href="../../../../api/data_juicer.ops.filter.image_validity_filter.html#data_juicer.ops.filter.ImageValidityFilter.compute_stats_single">[docs]</a>
