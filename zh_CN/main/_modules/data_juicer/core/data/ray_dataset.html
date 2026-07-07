@@ -739,6 +739,54 @@
 <span class="n">UNIFIED_IMG_BYTE_FIELDS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;buffer&quot;</span><span class="p">,</span> <span class="s2">&quot;image_bytes&quot;</span><span class="p">,</span> <span class="s2">&quot;img_bytes&quot;</span><span class="p">]</span>  <span class="c1"># in struct</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_iter_local_parquet_files</span><span class="p">(</span><span class="n">paths</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Yield local Parquet files under ``paths`` without touching row data.&quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">glob</span>
+
+    <span class="n">raw</span> <span class="o">=</span> <span class="n">paths</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">paths</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">))</span> <span class="k">else</span> <span class="p">[</span><span class="n">paths</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">is_remote_path</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">raw</span><span class="p">):</span>
+        <span class="k">return</span>
+    <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">raw</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+            <span class="k">yield from</span> <span class="p">(</span>
+                <span class="n">f</span>
+                <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span>
+                    <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">&quot;**&quot;</span><span class="p">,</span> <span class="s2">&quot;*.parquet&quot;</span><span class="p">),</span> <span class="n">recursive</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.parquet&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">):</span>
+            <span class="k">yield</span> <span class="n">path</span>
+
+
+<div class="viewcode-block" id="infer_unified_ocr_read_columns">
+<a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.infer_unified_ocr_read_columns">[文档]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">infer_unified_ocr_read_columns</span><span class="p">(</span><span class="n">paths</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Infer the minimal columns needed by unified OCR preprocessing.</span>
+
+<span class="sd">    Ray/PyArrow can fail while sampling metadata for unrelated nested columns.</span>
+<span class="sd">    Unified OCR only needs one content column and one image column, so resolve</span>
+<span class="sd">    those columns from Parquet footers and project them during ``read_parquet``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow.parquet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pq</span>
+
+    <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">_iter_local_parquet_files</span><span class="p">(</span><span class="n">paths</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">schema_names</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">pq</span><span class="o">.</span><span class="n">ParquetFile</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">schema_arrow</span><span class="o">.</span><span class="n">names</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Could not inspect parquet schema for </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">continue</span>
+        <span class="n">content_col</span><span class="p">,</span> <span class="n">image_col</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">detect_unified_ocr_columns</span><span class="p">(</span><span class="n">schema_names</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">content_col</span> <span class="ow">and</span> <span class="n">image_col</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">content_col</span><span class="p">,</span> <span class="n">image_col</span><span class="p">]</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Unified OCR could not detect required columns from </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">; &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;available columns: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">schema_names</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="kc">None</span></div>
+
+
+
 <div class="viewcode-block" id="detect_unified_ocr_columns">
 <a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.detect_unified_ocr_columns">[文档]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">detect_unified_ocr_columns</span><span class="p">(</span><span class="n">columns</span><span class="p">):</span>
@@ -1620,6 +1668,31 @@
 <a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.RayDataset.count">[文档]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">count</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">count</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="RayDataset.read_unified_ocr_parquet">
+<a class="viewcode-back" href="../../../../api/data_juicer.core.data.ray_dataset.html#data_juicer.core.data.ray_dataset.RayDataset.read_unified_ocr_parquet">[文档]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">read_unified_ocr_parquet</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">paths</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">RayDataset</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;DJ_SKIP_CORRUPT_PARQUET&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">(</span>
+            <span class="s2">&quot;1&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;true&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;yes&quot;</span><span class="p">,</span>
+        <span class="p">):</span>
+            <span class="n">paths</span> <span class="o">=</span> <span class="n">filter_valid_parquet</span><span class="p">(</span><span class="n">paths</span><span class="p">)</span>
+
+        <span class="n">columns</span> <span class="o">=</span> <span class="n">infer_unified_ocr_read_columns</span><span class="p">(</span><span class="n">paths</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">columns</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Reading parquet for unified OCR preprocessing with columns: </span><span class="si">{</span><span class="n">columns</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">ray</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">read_parquet</span><span class="p">(</span><span class="n">paths</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">columns</span><span class="p">)</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">&quot;Could not infer unified OCR columns before reading parquet; &quot;</span>
+            <span class="s2">&quot;falling back to Ray&#39;s default read_parquet behavior.&quot;</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">ray</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">read_parquet</span><span class="p">(</span><span class="n">paths</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="RayDataset.read">
